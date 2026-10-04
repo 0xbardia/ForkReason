@@ -4,12 +4,18 @@ This file records the exact contract source certified for ForkReason V1. The
 contract is frozen; any change to `contracts/forkreason_registry.py` invalidates
 this record and requires re-certification of both test layers.
 
+**Re-certified 2026-10-04.** The hash below reflects the current source, after a
+dead pre-consensus write was removed from `challenge_case` (it re-wrote an
+existing key and contradicted its own comment; lifecycle is derived from revision
+state and never stored). Both test layers were re-run after that change:
+Direct Mode 51/51, Studio Mode 8/8, lint 3 checks.
+
 ## Source
 
 | Field | Value |
 |---|---|
 | Path | `contracts/forkreason_registry.py` |
-| SHA-256 | `bb80aa8826ea894bbba3a42da4657aea9cb0535cb8514fe75eae185f8016d5ee` |
+| SHA-256 | `867474f56b0fc169d9a254da4ac96435fa154156e09c85db08d1cbc3a0f92a0a` |
 | Dependency header | `# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }` |
 | Contract class | `ForkReasonRegistry` |
 
@@ -115,3 +121,54 @@ fail-closed parsing — are entirely GLSim's and were exercised for real. What i
 does not certify is the output quality of any hosted frontier model. That is not
 a contract property: the contract's job is to refuse bad decisions, which is
 what these tests verify.
+
+## Hosted deployment — NOT COMPLETED
+
+The frozen source above was **not** deployed to `studio.genlayer.com`.
+
+Two independent blockers, both requiring credentials or input this session does
+not have:
+
+1. **Hosted RPC refuses server-side requests.** `POST https://studio.genlayer.com/api`
+   from this host returns **HTTP 403 Forbidden** (and a bare GET returns 405).
+   The Studio endpoint is reachable only from a browser session that carries
+   the user's authenticated context.
+2. **The CLI requires an interactive keystore password.** The documented
+   non-interactive path
+
+   ```
+   genlayer deploy --contract contracts/forkreason_registry.py \
+                   --rpc https://studio.genlayer.com/api
+   ```
+
+   prompts `? Enter password to decrypt keystore:` and fails on attempt 1.
+   Guessing or bypassing that password is not acceptable.
+
+3. **The web editor could not be driven programmatically.** Monaco is not exposed
+   on `window`, the bundle is minified with no React fiber handle on the editor
+   node, the page CSP blocks fetching source from the host, and both a synthetic
+   `ClipboardEvent` paste and `document.execCommand('insertText')` are ignored.
+   Only genuine OS-level keystroke input would load the 27 KB source, which is
+   not something this session can emit.
+
+Consequently there is **no contract address, no deployment transaction hash, and
+no deployed read-method result**. None is claimed. The API reports this honestly
+rather than pretending:
+
+```json
+GET /api/v1/chain/contract
+{"network":"studionet","address":"","deployed":false,"source_sha256":null}
+```
+
+The frontend reflects the same truth: preparing a challenge shows the full
+transaction intent and states that the contract is not configured on this
+deployment, so signing is refused rather than silently discarded.
+
+### What is verified about the contract
+
+- Direct Mode: 51/51 against the Direct Mode VM.
+- Studio Mode: 8/8 against a real 5-validator GLSim network with leader rotation.
+- `genvm-lint`: 3 checks pass.
+- Source SHA-256 is recorded above and is reproducible with `sha256sum`.
+
+What is **not** verified is behaviour on the hosted Studio network specifically.
