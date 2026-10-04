@@ -169,7 +169,10 @@ def code_dna(
                 target,
                 origin_path=match.path,
                 target_path=target_p.path,
-                excerpt=_first_line(target_p.path, origin, excerpt_limit),
+                # Quote the TARGET file. Passing `origin` here made the lookup
+                # miss every time, so the evidence shipped with no excerpt and a
+                # reader could not see what the two files actually contain.
+                excerpt=_first_line(target_p.path, target, excerpt_limit),
             )
         )
 
@@ -239,9 +242,32 @@ def _is_uncommon_constant(value: str) -> bool:
     stripped = value.strip()
     if not stripped:
         return False
-    if stripped.isdigit() and len(stripped) <= 4:
+
+    # Reject values dominated by punctuation rather than words. Source contains
+    # string literals that are mostly delimiters — `, 1), (` is a real one, and
+    # it is shared by every project because it comes from tokenizing calls like
+    # `f(a, 1), (b)`. A lineage signal has to be mostly alphanumerics, or be an
+    # obvious format string / literal value such as `%s:%d`, `--no-cache` or
+    # `0x5F3759DF`, which are legitimately punctuation-heavy.
+    alnum = sum(1 for ch in stripped if ch.isalnum())
+    if alnum * 2 < len(stripped) and not _looks_structured(stripped):
         return False
-    if stripped in {"0", "1", "-1", "2", "true", "false", "null", "none"}:
+
+    # Round and sequence numbers. `12345`, `123456`, `10000` and `65536` are
+    # test fixtures and default limits that every project writes; a five-digit
+    # run of digits is a placeholder far more often than a magic number. Real
+    # constants carry structure (`0x5F3759DF`, `%s:%d`) rather than being a bare
+    # digit run.
+    if stripped.isdigit() and len(stripped) <= 6:
+        return False
+
+    if stripped in _PLACEHOLDER_CONSTANTS:
+        return False
+
+    # Placeholder text is matched case-insensitively: source writes it as
+    # `Hello`, `HELLO` or `hello` depending on the string, and none of those
+    # spellings carries lineage information.
+    if stripped.lower() in _PLACEHOLDER_CONSTANTS:
         return False
 
     # Protocol and tooling vocabulary. Two web frameworks in the same ecosystem
@@ -257,6 +283,70 @@ def _is_uncommon_constant(value: str) -> bool:
         return not is_common(stripped)
 
     return True
+
+
+def _looks_structured(value: str) -> bool:
+    """True for a punctuation-heavy value that is still a deliberate literal.
+
+    Format specifiers, hex literals, flags and dotted paths carry meaning in
+    their punctuation. Tokenizer debris like `, 1), (` does not: its punctuation
+    is arbitrary, so the words around it must dominate.
+    """
+    # printf/format specifiers: %s, %d, {:>8}
+    if "%" in value or "{" in value and "}" in value:
+        return True
+    # hex / binary / octal literals
+    if re.search(r"\b0[xXbBoO][0-9a-fA-F_]+", value):
+        return True
+    # command-line flags
+    if value.startswith("-") and len(value) > 1 and not value[1].isspace():
+        return True
+    # path-like or URL-like values with a recognizable separator
+    if "/" in value or value.count(".") >= 2:
+        return True
+    return False
+
+
+# Placeholder text that appears verbatim in essentially every project: example
+# strings, default help output and single words used as data. These were being
+# counted as "uncommon constants" for pairs that share nothing.
+_PLACEHOLDER_CONSTANTS = frozenset(
+    {
+        "true",
+        "false",
+        "null",
+        "none",
+        "hello",
+        "hello world",
+        "hello world!",
+        "world",
+        "world!",
+        "foo",
+        "bar",
+        "baz",
+        "foobar",
+        "lorem ipsum",
+        "test",
+        "example",
+        "example.com",
+        "test@example.com",
+        "user",
+        "username",
+        "password",
+        "admin",
+        "todo",
+        "show this message and exit.",
+        "usage",
+        "help",
+        "--help",
+        "-h",
+        "--version",
+        "-v",
+        "center",
+        "left",
+        "right",
+    }
+)
 
 
 _ECOSYSTEM_VOCABULARY = frozenset(

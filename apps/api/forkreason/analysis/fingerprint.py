@@ -233,6 +233,11 @@ def _extract_constants(text: str) -> list[str]:
 
     Magic numbers and fixed strings are among the few things a refactor does
     not erase, which makes them disproportionately useful as lineage evidence.
+
+    A candidate must contain a letter or digit and be more than whitespace and
+    punctuation. A bare length check admitted fragments like `, 1)`, `(`, `),`
+    — tokenizer debris that every file in the language produces — and they were
+    then counted as shared magic numbers between unrelated repositories.
     """
     out: list[str] = []
     for m in _NUMBER_RE.finditer(text):
@@ -240,8 +245,11 @@ def _extract_constants(text: str) -> list[str]:
     seen: Counter[str] = Counter()
     for m in _STRING_LITERAL_RE.finditer(text):
         value = (m.group(1) or m.group(2) or "").strip()
-        if len(value) >= 4 and not value.isdigit():
-            seen[value] += 1
+        if len(value) < 4 or value.isdigit():
+            continue
+        if not any(ch.isalnum() for ch in value):
+            continue
+        seen[value] += 1
     out.extend(v for v, n in seen.items() if n >= 2)
     return sorted(set(out))
 

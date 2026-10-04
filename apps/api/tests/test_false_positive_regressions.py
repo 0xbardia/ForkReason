@@ -205,6 +205,25 @@ def test_http_and_protocol_vocabulary_is_not_an_uncommon_constant() -> None:
         "Cookie",
         "utf-8",
         "localhost",
+        # Placeholder data that every project writes.
+        "Hello",
+        "Hello World!",
+        "World!",
+        "None",
+        "12345",
+        "123456",
+        "65536",
+        "foo",
+        "bar",
+        "example.com",
+        "Show this message and exit.",
+        "--help",
+        "True",
+        # Tokenizer punctuation, which every project in the language shares.
+        ")",
+        "(",
+        "),",
+        ", ",
     ]
     kept = [v for v in ecosystem if _is_uncommon_constant(v)]
     assert kept == [], f"ecosystem vocabulary counted as evidence: {kept}"
