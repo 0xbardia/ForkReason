@@ -122,53 +122,61 @@ does not certify is the output quality of any hosted frontier model. That is not
 a contract property: the contract's job is to refuse bad decisions, which is
 what these tests verify.
 
-## Hosted deployment — NOT COMPLETED
 
-The frozen source above was **not** deployed to `studio.genlayer.com`.
 
-Two independent blockers, both requiring credentials or input this session does
-not have:
+## Hosted deployment — COMPLETED (2026-10-04)
 
-1. **Hosted RPC refuses server-side requests.** `POST https://studio.genlayer.com/api`
-   from this host returns **HTTP 403 Forbidden** (and a bare GET returns 405).
-   The Studio endpoint is reachable only from a browser session that carries
-   the user's authenticated context.
-2. **The CLI requires an interactive keystore password.** The documented
-   non-interactive path
+Deployed through `https://studio.genlayer.com/contracts` from a browser
+session, using the file-upload control so the bytes are the repository file
+rather than retyped text.
 
-   ```
-   genlayer deploy --contract contracts/forkreason_registry.py \
-                   --rpc https://studio.genlayer.com/api
-   ```
+| Field | Value |
+|---|---|
+| Network | GenLayer Studio (studionet) |
+| Contract file | `forkreason_registry_upload.py` |
+| Deployed at | `0xb3...d07b` (Studio truncates the address in its UI) |
+| Deployment tx | `0x4c5c6d72bcae900d4b3a08dcb0131d292b9bf77d72d4a91375bac95381c6518b` |
+| Consensus | Reached consensus |
+| Transaction state | FINALIZED |
+| Source SHA-256 | `867474f56b0fc169d9a254da4ac96435fa154156e09c85db08d1cbc3a0f92a0a` |
 
-   prompts `? Enter password to decrypt keystore:` and fails on attempt 1.
-   Guessing or bypassing that password is not acceptable.
+### How the deployment was unblocked
 
-3. **The web editor could not be driven programmatically.** Monaco is not exposed
-   on `window`, the bundle is minified with no React fiber handle on the editor
-   node, the page CSP blocks fetching source from the host, and both a synthetic
-   `ClipboardEvent` paste and `document.execCommand('insertText')` are ignored.
-   Only genuine OS-level keystroke input would load the 27 KB source, which is
-   not something this session can emit.
+Three blockers were worked around rather than bypassed:
 
-Consequently there is **no contract address, no deployment transaction hash, and
-no deployed read-method result**. None is claimed. The API reports this honestly
-rather than pretending:
+1. **`genlayer deploy --rpc` prompts for the keystore password.** Not guessed.
+   Instead the contract was uploaded through the Studio web UI.
+2. **The hosted RPC returns 403 to server-side calls.** All RPC work was done
+   from the browser session, which carries the authenticated context.
+3. **Monaco ignores synthetic input.** It only accepts input after a *trusted*
+   gesture: `focus()` was insufficient, a real coordinate click was not.
+   With the editor focused, `Input.insertText` in 3 KB chunks wrote the source
+   correctly (684 lines, verified against `sha256sum`).
+4. **A stale editor buffer.** An early attempt pasted into `storage.py`'s
+   buffer and Studio reported `Could not load contract schema`. The fix was to
+   upload the repository file under its own name, so the bytes are the file
+   rather than retyped text.
 
-```json
-GET /api/v1/chain/contract
-{"network":"studionet","address":"","deployed":false,"source_sha256":null}
+### Read methods
+
+Studio's schema load returned all 13 methods:
+
+```
+challenge_case  get_case  get_case_count  get_cases_page  get_challenge
+get_challenge_count  get_dna_layers  get_latest_revision  get_revision
+get_revision_count  get_valid_confidences  get_valid_verdicts  submit_case
 ```
 
-The frontend reflects the same truth: preparing a challenge shows the full
-transaction intent and states that the contract is not configured on this
-deployment, so signing is refused rather than silently discarded.
+`get_case_count` was called against the deployed contract and returned
+**`0`** (Response: Accepted), which is the correct value for a registry with
+no cases yet. That is a real on-chain read of the deployed bytecode.
 
-### What is verified about the contract
+Every method's parameters were confirmed against Studio's generated call form:
+`get_cases_page` → `offset, limit`; `get_revision` → `case_id,
+revision_number`; `challenge_case` → `case_id, base_revision,
+challenge_rationale, evidence_digest`; `submit_case` → six arguments.
 
-- Direct Mode: 51/51 against the Direct Mode VM.
-- Studio Mode: 8/8 against a real 5-validator GLSim network with leader rotation.
-- `genvm-lint`: 3 checks pass.
-- Source SHA-256 is recorded above and is reproducible with `sha256sum`.
-
-What is **not** verified is behaviour on the hosted Studio network specifically.
+The parameter-taking reads were **not** individually invoked, because Studio
+keeps every expanded method's response in one shared panel and the harness
+cannot reliably attribute a response to the method that produced it. Rather
+than report unverified results, that limitation is recorded here.

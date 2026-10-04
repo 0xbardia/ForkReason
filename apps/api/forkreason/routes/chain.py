@@ -58,6 +58,26 @@ async def contract_info() -> dict:
             "Every state-changing action is signed by the user's own browser "
             "wallet. The ForkReason server holds no key that can act for a user."
         ),
+        # A deployment that happened, with the evidence for it. Kept separate
+        # from `deployed`, which means "this server can target a contract".
+        "release_deployment": {
+            "network": "GenLayer Studio (studionet)",
+            "file": "forkreason_registry_upload.py",
+            "address_display": "0xb3...d07b",
+            "tx": (
+                "0x4c5c6d72bcae900d4b3a08dcb0131d292b9bf77d72d4a91375bac95381c6518b"
+            ),
+            "consensus": "Reached consensus",
+            "state": "FINALIZED",
+            "verified_read": "get_case_count returned 0 (Accepted)",
+            "note": (
+                "Deployed and read on Studio. The address above is shown "
+                "truncated as Studio displays it; the full address is not "
+                "wired into this deployment, so writes remain refused here "
+                "rather than being sent to an address this server cannot "
+                "verify."
+            ),
+        },
     }
 
 
