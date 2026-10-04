@@ -126,13 +126,21 @@ class ProfileStore:
             select(Case).where(Case.id == result.case_id)
         )
         if case is None:
+            # The pinned commits are what make a finding reproducible, so they
+            # are taken from the canonical manifest rather than left blank.
+            # Anyone with the same two commits must be able to recompute the
+            # manifest hash; a case with no commit recorded cannot be checked.
+            manifest = result.manifest or {}
+            origin_ref = manifest.get("origin") or {}
+            target_ref = manifest.get("target") or {}
+
             case = Case(
                 id=result.case_id,
                 job_id=job_id,
                 origin_full_name=outcome_origin(result),
                 target_full_name=outcome_target(result),
-                origin_commit="",
-                target_commit="",
+                origin_commit=(origin_ref.get("commit") or "")[:64],
+                target_commit=(target_ref.get("commit") or "")[:64],
                 manifest_hash=result.manifest_hash,
                 current_revision=0,
                 lifecycle="resolved",
@@ -178,6 +186,7 @@ class ProfileStore:
             shared_upstream=(outcome.shared_upstream or None),
             independent_origin_plausibility=outcome.independent_origin_plausibility,
             manifest_hash=(result.manifest_hash if result else case.manifest_hash),
+            manifest=(result.manifest if result else {}),
             rationale=outcome.summary[:2000],
             summary={
                 "evidence_count": len(outcome.evidence),

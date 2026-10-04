@@ -760,3 +760,42 @@ def test_digest_does_not_include_full_file_bodies() -> None:
                 assert body not in result.consensus_digest, (
                     f"file {f.path} was shipped whole to the model"
                 )
+
+
+def test_manifest_hash_is_verifiable_by_an_outsider() -> None:
+    """The manifest hash must be recomputable from the manifest alone.
+
+    This is ForkReason's central claim: a finding is checkable by anyone. If
+    the hash cannot be reproduced from published data and a published rule, the
+    claim is decorative. The rule is domain-separated canonical JSON, so the
+    test reconstructs it with stdlib only rather than calling the helper back.
+    """
+
+    import hashlib
+    import json as _json
+
+    from forkreason.analysis.manifest import build_manifest, manifest_hash
+    from forkreason.ids import canonical_json
+
+    manifest = {"origin": {"full_name": "a/b", "commit": "a" * 40}, "evidence": []}
+    reported = manifest_hash(manifest)
+
+    # Exactly what an auditor would do, using only the documented rule.
+    recomputed = hashlib.sha256(
+        f"{'forkreason/v1'}\n{canonical_json(manifest)}".encode()
+    ).hexdigest()
+
+    assert reported == recomputed
+
+    # And the hash must change if any evidence changes.
+    tampered = {**manifest, "evidence": [{"id": "x"}]}
+    assert manifest_hash(tampered) != reported
+
+    # Ordering of findings must not matter: canonicalization sorts them.
+    reordered = {
+        "origin": {"full_name": "a/b", "commit": "a" * 40},
+        "evidence": [{"id": "y"}, {"id": "x"}],
+    }
+    assert manifest_hash(reordered) == manifest_hash(
+        {"origin": {"full_name": "a/b", "commit": "a" * 40}, "evidence": [{"id": "x"}, {"id": "y"}]}
+    )

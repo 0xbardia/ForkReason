@@ -16,16 +16,22 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 import requests
 
 from ..domain import IntakeError, UnsupportedRepositoryError
-from .github_url import ALLOWED_HOST, RepoRef, api_repo_path
+from .github_url import ALLOWED_HOST, RepoRef, api_repo_path, validate_repo_input
 from .snapshot import IntakeLimits, RepoMetadata, check_repo_size
 
 log = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "https://api.github.com"
+# GitHub's own API host. A 301 rename may only be resolved against these two.
+ALLOWED_API_HOST = "api.github.com"
+# A repository can be renamed more than once; the hop count is bounded so a
+# redirect cycle between two renamed repositories terminates.
+MAX_RENAME_HOPS = 3
 USER_AGENT = "ForkReason/1.0 (+https://forkreason.bydx.fun)"
 MAX_ATTEMPTS = 3
 BACKOFF_BASE_SECONDS = 1.0
@@ -149,12 +155,135 @@ def _get(
     )
 
 
+def _canonical_from_redirect(ref: RepoRef, response) -> RepoRef | None:
+    """Resolve a GitHub 301 rename to a canonical `owner/name`.
+
+    Redirects are never followed automatically — that is exactly what would let
+    a hostile repository steer a request off the API host. Instead the canonical
+    name is read from the `Location` header, which GitHub only sets to its own
+    API host, and is put through the same validation as any user-supplied name.
+    Anything that does not parse as `owner/name` on an expected host is
+    rejected rather than followed.
+    """
+
+    location = (response.headers.get("Location") or "").strip()
+    if not location:
+        return None
+
+    try:
+        parsed = urlsplit(location)
+    except ValueError:
+        return None
+
+    if parsed.scheme not in ("http", "https"):
+        return None
+    if parsed.netloc.lower() not in (ALLOWED_API_HOST, ALLOWED_HOST):
+        return None
+
+    parts = [p for p in parsed.path.split("/") if p]
+    # The canonical API form is /repos/<owner>/<name>. A bare
+    # /repositories/<id> is an ID, not a name, and must not be mistaken for
+    # owner/name.
+    if len(parts) >= 3 and parts[0] == "repos":
+        parts = parts[1:3]
+    if len(parts) != 2:
+        return None
+    if parts[0] == "repositories" or parts[1].isdigit():
+        return None
+
+    try:
+        return validate_repo_input(f"{parts[0]}/{parts[1]}")
+    except Exception:
+        return None
+
+
+def _resolve_by_repository_id(ref: RepoRef, response, cfg: _ClientConfig) -> RepoRef | None:
+    """Resolve a transferred repository via its numeric GitHub id.
+
+    A transfer answers 301 with `Location: .../repositories/<id>`. The id is the
+    only canonical reference in that header; the real `owner/name` lives in the
+    body of that endpoint. The path is rebuilt from the validated host and a
+    digits-only id, so no attacker-supplied host or path can be smuggled in, and
+    the resulting `full_name` is put through normal validation.
+    """
+
+    location = (response.headers.get("Location") or "").strip()
+    if not location:
+        return None
+
+    try:
+        parsed = urlsplit(location)
+    except ValueError:
+        return None
+
+    if parsed.scheme not in ("http", "https"):
+        return None
+    if parsed.netloc.lower() != ALLOWED_API_HOST:
+        return None
+
+    parts = [p for p in parsed.path.split("/") if p]
+    if len(parts) != 2 or parts[0] != "repositories" or not parts[1].isdigit():
+        return None
+
+    # Reconstructed from the validated host and a digits-only id.
+    response = _get(f"/{parts[0]}/{parts[1]}", cfg)
+    if response.status_code != 200:
+        return None
+
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    full_name = data.get("full_name")
+    if not isinstance(full_name, str) or full_name.count("/") != 1:
+        return None
+
+    try:
+        return validate_repo_input(full_name)
+    except Exception:
+        return None
+
+
 def fetch_repo_metadata(
     ref: RepoRef, *, token: str | None = None, base_url: str | None = None
 ) -> RepoMetadata:
     """Fetch repository metadata and pin the current default-branch commit."""
     cfg = _config(token, base_url)
     response = _get(api_repo_path(ref), cfg)
+
+    # GitHub answers 301 when a repository was renamed or transferred. Two
+    # shapes occur:
+    #
+    #   * a rename, where Location is /repos/<owner>/<name> and the name is
+    #     readable from the header;
+    #   * a transfer, where Location is /repositories/<id> and the canonical
+    #     name only exists in that endpoint's response body.
+    #
+    # `allow_redirects` stays False throughout: following a redirect blindly is
+    # what would let a hostile repository steer a request off the API host. The
+    # hop count is bounded so a cycle between two renamed repositories
+    # terminates rather than spins.
+    for _ in range(MAX_RENAME_HOPS):
+        if response.status_code != 301:
+            break
+
+        canonical = _canonical_from_redirect(ref, response)
+        if canonical is not None:
+            ref = canonical
+            response = _get(api_repo_path(ref), cfg)
+            continue
+
+        transferred = _resolve_by_repository_id(ref, response, cfg)
+        if transferred is None:
+            raise RepositoryNotFoundError(
+                "repository_not_found",
+                f"{ref.full_name} could not be resolved after a rename or transfer.",
+            )
+        ref = transferred
+        response = _get(api_repo_path(ref), cfg)
 
     if response.status_code == 404:
         raise RepositoryNotFoundError(

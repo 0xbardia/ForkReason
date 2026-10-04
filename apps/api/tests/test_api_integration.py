@@ -290,7 +290,7 @@ def test_crashed_worker_leaves_a_recoverable_job(session) -> None:
     """
     import datetime as dt
 
-    from forkreason.models import AnalysisJob
+    from forkreason.models import AnalysisJob, RepositorySnapshot
 
     job = _enqueue(session, "q3")
     with pytest.raises(RuntimeError):
@@ -317,7 +317,7 @@ def test_crashed_worker_leaves_a_recoverable_job(session) -> None:
 
 
 def test_completed_job_releases_its_lease(session) -> None:
-    from forkreason.models import AnalysisJob
+    from forkreason.models import AnalysisJob, RepositorySnapshot
 
     job = _enqueue(session, "q3b")
     with q.claim_job(session, "worker-a") as claimed:
@@ -328,7 +328,7 @@ def test_completed_job_releases_its_lease(session) -> None:
 def test_recovery_stops_repeating_failures(session) -> None:
     import datetime as dt
 
-    from forkreason.models import AnalysisJob
+    from forkreason.models import AnalysisJob, RepositorySnapshot
 
     job = _enqueue(session, "q4")
     with pytest.raises(RuntimeError):
@@ -553,3 +553,114 @@ def test_wrong_method_returns_error_envelope(client: TestClient) -> None:
     response = client.post("/health")
     assert response.status_code in (404, 405)
     assert "error" in response.json() or response.status_code == 405
+
+
+def test_persisted_case_records_pinned_commits_and_manifest(tmp_path) -> None:
+    """A case must record which commits it analysed, and its manifest.
+
+    Reproducibility rests on this. A case that names two repositories but not
+    their pinned commits cannot be re-checked, and a manifest that is computed
+    but never stored makes the manifest hash an unverifiable claim.
+    """
+
+    from forkreason.analysis.manifest import manifest_hash
+    from forkreason.analysis.pipeline import PipelineResult
+    from forkreason.db import get_session_factory
+    from forkreason.domain import AnalysisOutcome
+    from forkreason.jobs.profile_store import ProfileStore
+    from forkreason.models import Case, CaseRevision
+
+    manifest = {
+        "schema_version": 1,
+        "origin": {"full_name": "acme/origin", "commit": "a" * 40},
+        "target": {"full_name": "acme/target", "commit": "b" * 40},
+        "evidence": [],
+    }
+    outcome = AnalysisOutcome(
+        verdict="INSUFFICIENT_EVIDENCE",
+        confidence="LOW",
+        direction="NONE",
+        summary="not enough evidence",
+        evidence=(),
+        conflicting=(),
+        explanations=(),
+        upstream_candidates=(),
+        shared_upstream=None,
+        independent_origin_plausibility="LOW",
+        origin_timeline=(),
+        target_timeline=(),
+    )
+    result = PipelineResult(
+        outcome=outcome,
+        manifest=manifest,
+        manifest_hash=manifest_hash(manifest),
+        consensus_digest="",
+        case_id="testcase1234567890",
+        evidence_counts={},
+        dropped_weak_evidence=0,
+        elapsed_seconds=0.1,
+    )
+
+    from forkreason.models import AnalysisJob, RepositorySnapshot
+
+    store = ProfileStore(tmp_path)
+    session = get_session_factory()()
+    try:
+        # The case references its job, and the job references its snapshots, so
+        # the parent chain must exist for the foreign keys to hold.
+        session.add_all([
+            RepositorySnapshot(
+                id="snap_o",
+                owner="acme",
+                name="origin",
+                full_name="acme/origin",
+                commit_sha="a" * 40,
+                default_branch="main",
+                is_fork=False,
+                size_bytes=0,
+                file_count=0,
+            ),
+            RepositorySnapshot(
+                id="snap_t",
+                owner="acme",
+                name="target",
+                full_name="acme/target",
+                commit_sha="b" * 40,
+                default_branch="main",
+                is_fork=False,
+                size_bytes=0,
+                file_count=0,
+            ),
+        ])
+        session.flush()
+        session.add(
+            AnalysisJob(
+                id="job_test",
+                status="succeeded",
+                stage="consensus_preparation",
+                origin_snapshot_id="snap_o",
+                target_snapshot_id="snap_t",
+                origin_full_name="acme/origin",
+                target_full_name="acme/target",
+                origin_commit="a" * 40,
+                target_commit="b" * 40,
+                idempotency_key="k_test",
+            )
+        )
+        session.flush()
+
+        store.persist_case(session, job_id="job_test", result=result)
+        session.commit()
+
+        case = session.get(Case, "testcase1234567890")
+        assert case is not None
+        assert case.origin_commit == "a" * 40, case.origin_commit
+        assert case.target_commit == "b" * 40, case.target_commit
+
+        revision = session.get(CaseRevision, "testcase1234567890-1")
+        assert revision is not None
+        assert revision.manifest == manifest
+        assert revision.manifest_hash == manifest_hash(manifest)
+    finally:
+        session.rollback()
+        session.close()

@@ -439,10 +439,6 @@ class ForkReasonRegistry(gl.Contract):
 
         submitter = gl.message.sender_address.as_hex
 
-        # Mark the case as challenged before consensus so the lifecycle is
-        # observable, then resolve to a new revision.
-        self.case_exists[case_id] = True
-
         challenge_id = case_id + "#" + str(current + 1)
         if challenge_id in self.challenge_exists:
             raise gl.vm.UserError("challenge already recorded")

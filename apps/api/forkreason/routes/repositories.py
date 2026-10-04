@@ -72,9 +72,18 @@ async def validate_repositories(payload: ValidateRequest) -> ValidateResponse:
         except IntakeError as exc:
             raise bad_request(exc.code, exc.message) from exc
 
-        commits = recent_commits(
-            ref, metadata, token=settings.github_token, base_url=settings.github_api_base_url
-        )
+        try:
+            commits = recent_commits(
+                ref, metadata, token=settings.github_token,
+                base_url=settings.github_api_base_url,
+            )
+        except IntakeError as exc:
+            # Commit history is advisory here, not fatal: a rate limit or a
+            # transient GitHub error should surface as a readable 4xx with the
+            # repository's details already resolved, not an opaque 500. This
+            # call sits outside the metadata try/except above, so without it
+            # its IntakeError escaped the handler entirely.
+            raise bad_request(exc.code, exc.message) from exc
         if not commits:
             warnings.append(
                 f"{ref.full_name}: commit history could not be read. Lineage "

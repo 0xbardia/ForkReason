@@ -166,6 +166,38 @@ async def get_case(case_id: str, session: Session = Depends(get_db)) -> dict:
     }
 
 
+@router.get("/cases/{case_id}/manifest")
+async def get_case_manifest(case_id: str, session: Session = Depends(get_db)) -> dict:
+    """The canonical evidence manifest behind this case's manifest hash.
+
+    A case URL is what people share, so the manifest is reachable from the case
+    itself rather than only from the originating job. Whoever holds the two
+    pinned commits can recompute the hash and confirm the finding was not
+    altered after analysis.
+    """
+
+    case = session.get(Case, case_id)
+    if case is None:
+        raise not_found("case_not_found", "That case does not exist.")
+
+    revision = session.scalar(
+        select(CaseRevision).where(
+            CaseRevision.case_id == case.id,
+            CaseRevision.revision_number == case.current_revision,
+        )
+    )
+    if revision is None:
+        raise not_found("revision_not_found", "That case has no resolved revision.")
+
+    return {
+        "case_id": case.id,
+        "revision_number": revision.revision_number,
+        "manifest_hash": revision.manifest_hash,
+        "manifest": revision.manifest or {},
+        "origin_commit": case.origin_commit,
+        "target_commit": case.target_commit,
+    }
+
 @router.get("/cases/{case_id}/evidence")
 async def get_case_evidence(
     case_id: str,

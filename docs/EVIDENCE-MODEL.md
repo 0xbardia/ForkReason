@@ -114,6 +114,39 @@ altered between analysis and record. That property is the reason determinism is
 a hard constraint on the engine — a manifest that varied run to run would make
 the hash meaningless.
 
+### Verifying a manifest yourself
+
+Fetch it and re-hash it. The rule is domain-separated canonical JSON, so it
+needs no project code — only a SHA-256 and sorted-key JSON:
+
+```bash
+curl -s https://forkreason.bydx.fun/api/v1/cases/<case-id>/manifest \
+  | jq -S -c '.manifest'
+```
+
+```python
+import hashlib, json
+manifest = json.load(open("manifest.json"))
+salt = "forkreason/v1"                       # domain separator, published in ids.py
+canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"),
+                       ensure_ascii=True)
+print(hashlib.sha256(f"{salt}\n{canonical}".encode()).hexdigest())
+```
+
+That value must equal `manifest_hash`. The case id is derived the same way from
+the two pinned repositories and commits, so the pair
+`(case_id, manifest_hash)` is independently checkable.
+
+Two properties make this meaningful and are covered by
+`test_manifest_hash_is_verifiable_by_an_outsider`:
+
+- **Tamper-evident.** Changing any evidence item changes the hash.
+- **Order-independent.** Reordering findings does not change the hash, because
+  the order of a set of findings is an artifact of analysis, not meaning.
+
+The manifest itself is stored per revision and served from
+`GET /api/v1/cases/{id}/manifest`.
+
 ## Bounded by construction
 
 - Whole repositories are never stored on-chain or sent to a model.

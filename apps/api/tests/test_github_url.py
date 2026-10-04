@@ -197,3 +197,37 @@ def test_every_rejection_carries_a_specific_code_and_reason() -> None:
             assert err.code != "invalid_repository_input", f"generic code for {raw!r}"
         # Reason must never echo raw input back (no reflection into UI/logs).
         assert "\n" not in err.reason and "\x00" not in err.reason
+
+
+def test_github_redirect_cannot_steer_off_host() -> None:
+    """A 301 rename must only ever resolve to GitHub's own host.
+
+    ForkReason never follows redirects automatically, because that is what
+    would let a hostile repository redirect a request to an attacker-controlled
+    host. The rename path reads the Location header instead, so it must refuse
+    anything that is not GitHub.
+    """
+
+    from forkreason.repos.github_api import _canonical_from_redirect
+    from forkreason.repos.github_url import validate_repo_input
+
+    ref = validate_repo_input("a/b")
+
+    class _Response:
+        def __init__(self, location: str) -> None:
+            self.headers = {"Location": location}
+
+    assert (
+        _canonical_from_redirect(ref, _Response("https://api.github.com/repos/psf/psf-black"))
+        == validate_repo_input("psf/psf-black")
+    )
+
+    # Off-host, malformed, and non-http schemes are all refused.
+    for location in (
+        "https://evil.example/repos/a/b",
+        "http://localhost:8080/repos/a/b",
+        "file:///etc/passwd",
+        "",
+        "https://api.github.com/repositories/1",
+    ):
+        assert _canonical_from_redirect(ref, _Response(location)) is None, location

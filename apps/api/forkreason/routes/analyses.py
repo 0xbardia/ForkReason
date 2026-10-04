@@ -235,6 +235,7 @@ async def get_analysis_manifest(job_id: str, session: Session = Depends(get_db))
         "case_id": case.id,
         "revision_number": revision.revision_number,
         "manifest_hash": revision.manifest_hash,
+        "manifest": revision.manifest or {},
         "verdict": revision.verdict,
         "confidence": revision.confidence,
         "direction": revision.direction,

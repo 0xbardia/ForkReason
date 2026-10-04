@@ -223,3 +223,109 @@
   color: var(--text-primary);
   font-weight: var(--weight-semibold);
 }
+/* ==========================================================================
+   Roadmap.
+
+   Status is the information hierarchy here: SHIPPED, NEXT, LATER, RESEARCH,
+   and a closing group of things that will never be built. Each group carries
+   its own colour so scope is legible before it is read.
+   ========================================================================== */
+
+.roadmap-page {
+  padding-block: var(--space-7) var(--space-8);
+}
+
+.roadmap-head {
+  margin-bottom: var(--space-7);
+  max-width: var(--measure-prose);
+}
+
+.roadmap-group {
+  margin-bottom: var(--space-7);
+}
+
+.roadmap-group-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--mint);
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--glass-edge);
+}
+
+.roadmap-group:nth-of-type(3) .roadmap-group-title { color: var(--aqua); }
+.roadmap-group:nth-of-type(4) .roadmap-group-title { color: var(--amber); }
+.roadmap-group:nth-of-type(5) .roadmap-group-title { color: var(--text-muted); }
+
+.roadmap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+@media (min-width: 760px) {
+  .roadmap-list {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+
+.roadmap-item {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--glass);
+  border: 1px solid var(--glass-edge);
+  border-left-width: 2px;
+}
+
+.roadmap-item-title {
+  margin: 0 0 0.25rem;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
+.roadmap-item-body {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: var(--leading-relaxed);
+}
+
+.roadmap-never-list {
+  margin: 0 0 var(--space-4);
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  max-width: var(--measure-prose);
+}
+
+.roadmap-never-list li::marker {
+  color: var(--coral);
+}
+
+.roadmap-never {
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--coral) 5%, transparent);
+  border: 1px solid color-mix(in oklab, var(--coral) 20%, transparent);
+}
+
+.roadmap-never .roadmap-group-title {
+  color: var(--coral);
+  border-bottom-color: color-mix(in oklab, var(--coral) 24%, transparent);
+}
+
+.roadmap-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  max-width: var(--measure-prose);
+}

@@ -78,7 +78,26 @@ def code_dna(
     # 2. Unusual constants: the strongest code-level signal.
     o_consts = Counter(c for p in origin_prints.values() for c in p.constants)
     t_consts = Counter(c for p in target_prints.values() for c in p.constants)
-    shared_consts = {c for c in (set(o_consts) & set(t_consts)) if _is_uncommon_constant(c)}
+
+    # A string literal that recurs across many files of a single project is
+    # that project's own vocabulary — a config key, a URL scheme, an attribute
+    # name — not a constant that travelled from somewhere else.
+    o_files = max(1, len(origin_prints))
+    t_files = max(1, len(target_prints))
+
+    def _discriminative(value: str) -> bool:
+        """Shared, but not ubiquitous on either side."""
+        if not _is_uncommon_constant(value):
+            return False
+        # Appears in a large share of one repository's files => shared
+        # vocabulary, not inherited lineage.
+        o_share = o_consts[value] / o_files
+        t_share = t_consts[value] / t_files
+        return o_share <= 0.25 and t_share <= 0.25
+
+    shared_consts = {
+        c for c in (set(o_consts) & set(t_consts)) if _discriminative(c)
+    }
     if shared_consts:
         # More distinct shared constants means less chance of coincidence.
         breadth = min(1.0, len(shared_consts) / 8.0)
@@ -170,7 +189,23 @@ def _rare_structure(prints: dict[str, FileFingerprint]) -> set[str]:
 
 
 def _is_uncommon_constant(value: str) -> bool:
-    """Reject round numbers and short values that collide by accident."""
+    """Reject values that collide by accident rather than by shared authorship.
+
+    Two things pass the length test but carry no lineage information:
+
+    * **Round numbers** — `0`, `42`, `-1`.
+    * **Ordinary identifiers used as string literals.** `base_url`, `host`,
+      `method`, `endpoint` are web-framework vocabulary; every project in the
+      ecosystem writes them. Counting them as "uncommon constants" inflated the
+      CODE score for entirely unrelated repositories — two unrelated Python
+      projects were reported LIKELY_DERIVED / HIGH on a shared list of attribute
+      names.
+
+    A constant is only lineage evidence if it is both **discriminative** (rare
+    enough that coincidence is unlikely) and not a plain identifier. Anything
+    that is a bare lowercase identifier is configuration vocabulary.
+    """
+
     stripped = value.strip()
     if not stripped:
         return False
@@ -178,6 +213,13 @@ def _is_uncommon_constant(value: str) -> bool:
         return False
     if stripped in {"0", "1", "-1", "2", "true", "false", "null", "none"}:
         return False
+
+    # A bare identifier (`base_url`, `host`) is framework vocabulary, not a
+    # magic constant. Require either a non-word character (0x5F3759DF,
+    # %s:%d, --flag) or a name that is uncommon by the shared rarity baseline.
+    if stripped.replace("_", "").isalnum() and stripped.islower():
+        return not is_common(stripped)
+
     return True
 
 

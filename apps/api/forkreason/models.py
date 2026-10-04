@@ -164,6 +164,10 @@ class CaseRevision(Base):
     shared_upstream: Mapped[str | None] = mapped_column(String(240))
     independent_origin_plausibility: Mapped[str | None] = mapped_column(String(16))
     manifest_hash: Mapped[str] = mapped_column(String(80), nullable=False)
+    # The canonical manifest itself, so anyone holding the two pinned commits
+    # can recompute the hash above and confirm nothing was altered between
+    # analysis and record. Without it the hash is an unfalsifiable claim.
+    manifest: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     rationale: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     tx_hash: Mapped[str | None] = mapped_column(String(80))
