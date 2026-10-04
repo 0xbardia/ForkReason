@@ -75,6 +75,7 @@ async def create_analysis(
         )
 
     profiles: list = []
+    store = _store()
     for ref in (origin_ref, target_ref):
         try:
             metadata = fetch_repo_metadata(
@@ -83,8 +84,20 @@ async def create_analysis(
         except IntakeError as exc:
             raise bad_request(exc.code, exc.message) from exc
 
+        # `fetch_repo_metadata` resolves renames and transfers, so the canonical
+        # identity can differ from what the user typed. Everything downstream must
+        # key off the RESOLVED name, and the snapshot id must be the one the store
+        # actually holds: the worker re-derives the tree directory from the row's
+        # own id, so extracting under a different id left the worker looking in a
+        # directory that did not exist — every renamed repository failed with
+        # `snapshot_unavailable`.
+        ref = metadata.ref
         snapshot_id = snapshot_id_for(ref.full_name, metadata.commit_sha)
-        tree = _store().snapshot_dir / ref.owner / f"{ref.name}__{snapshot_id[:16]}"
+        existing = store.find_snapshot(session, ref.full_name, metadata.commit_sha)
+        if existing is not None:
+            snapshot_id = existing.id
+
+        tree = store.snapshot_dir / ref.owner / f"{ref.name}__{snapshot_id[:16]}"
 
         try:
             archive_commit(str(ref.canonical_url), metadata.commit_sha, tree)
@@ -110,18 +123,19 @@ async def create_analysis(
             )
 
         cache_profile_metadata(tree / "_forkreason_inventory.json", ref, profile, truncated)
-        profiles.append((snapshot_id, profile, truncated, tree))
+        profiles.append((snapshot_id, profile, truncated, tree, ref))
 
-    origin_snapshot_id, origin_profile, origin_truncated, origin_tree = profiles[0]
-    target_snapshot_id, target_profile, target_truncated, target_tree = profiles[1]
+    origin_snapshot_id, origin_profile, origin_truncated, origin_tree, origin_ref_final = profiles[0]
+    target_snapshot_id, target_profile, target_truncated, target_tree, target_ref_final = profiles[1]
 
-    store = _store()
-    store.upsert_snapshot(session, origin_snapshot_id, origin_profile, truncated=origin_truncated)
-    store.upsert_snapshot(session, target_snapshot_id, target_profile, truncated=target_truncated)
-    for snapshot_id, tree in ((origin_snapshot_id, origin_tree), (target_snapshot_id, target_tree)):
-        row = session.get(RepositorySnapshot, snapshot_id)
-        if row is not None:
-            row.snapshot_path = str(tree / "_forkreason_inventory.json")
+    origin_row = store.upsert_snapshot(
+        session, origin_snapshot_id, origin_profile, truncated=origin_truncated
+    )
+    target_row = store.upsert_snapshot(
+        session, target_snapshot_id, target_profile, truncated=target_truncated
+    )
+    for row, tree in ((origin_row, origin_tree), (target_row, target_tree)):
+        row.snapshot_path = str(tree / "_forkreason_inventory.json")
     session.commit()
 
     idem = idempotency_key_for(

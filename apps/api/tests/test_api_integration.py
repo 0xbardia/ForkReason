@@ -664,3 +664,92 @@ def test_persisted_case_records_pinned_commits_and_manifest(tmp_path) -> None:
     finally:
         session.rollback()
         session.close()
+
+
+def test_renamed_repository_snapshot_is_idempotent_under_a_different_id(tmp_path) -> None:
+    """A renamed repository must not break snapshot bookkeeping.
+
+    `tiangolo/typer` resolves to `fastapi/typer`, so the snapshot id computed
+    from the canonical name can differ from one already on file. Two failures
+    came out of that, and both are pinned here:
+
+    * the insert violated the unique constraint on (full_name, commit_sha),
+      which surfaced to the user as `internal_error`;
+    * the pinned tree was extracted under the freshly-computed id while the row
+      kept the old one, so the worker's `load_profile` looked in a directory
+      that did not exist and every analysis failed with `snapshot_unavailable`.
+    """
+    import hashlib
+
+    from forkreason.db import get_session_factory
+    from forkreason.domain import CommitEntry, FileEntry, RepoProfile
+
+    from forkreason.jobs.profile_store import ProfileStore
+    from forkreason.models import RepositorySnapshot
+
+    def _profile(full_name: str) -> RepoProfile:
+        body = "def handler(event):\n    return event.payload\n"
+        return RepoProfile(
+            full_name=full_name,
+            commit_sha="c" * 40,
+            files=(
+                FileEntry(
+                    path="src/app.py",
+                    size=len(body),
+                    sha256=hashlib.sha256(body.encode()).hexdigest(),
+                    language="python",
+                    text=body,
+                ),
+            ),
+            commits=(
+                CommitEntry(
+                    sha="c" * 40,
+                    timestamp=1_600_000_000,
+                    author="Dev <d@example.com>",
+                    message="Initial commit",
+                ),
+            ),
+            description="",
+            is_fork=False,
+            parent_full_name=None,
+        )
+
+    store = ProfileStore(tmp_path)
+    session = get_session_factory()()
+    try:
+        session.add(
+            RepositorySnapshot(
+                id="stale_id_aaaaaaaaaa",
+                owner="tiangolo",
+                name="typer",
+                full_name="tiangolo/typer",
+                commit_sha="c" * 40,
+                default_branch="main",
+                is_fork=False,
+                size_bytes=0,
+                file_count=0,
+            )
+        )
+        session.flush()
+
+        profile = _profile("tiangolo/typer")
+
+        # A freshly computed id must not collide with the stored row.
+        row = store.upsert_snapshot(
+            session, "fresh_id_bbbbbbbbbb", profile, truncated=False
+        )
+        session.commit()
+        assert row.id == "stale_id_aaaaaaaaaa"
+        assert row.full_name == "tiangolo/typer"
+
+        # find_snapshot must find it by (full_name, commit), which is what the
+        # analysis route uses to pin the tree to the id that actually holds it.
+        found = store.find_snapshot(session, "tiangolo/typer", "c" * 40)
+        assert found is not None
+        assert found.id == "stale_id_aaaaaaaaaa"
+
+        # A commit nobody has stored yields no row.
+        assert store.find_snapshot(session, "tiangolo/typer", "d" * 40) is None
+    finally:
+        session.rollback()
+        session.close()

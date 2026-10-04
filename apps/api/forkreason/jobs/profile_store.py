@@ -51,11 +51,34 @@ class ProfileStore:
 
     # --- snapshots -------------------------------------------------------
 
+    def find_snapshot(
+        self, session: Session, full_name: str, commit_sha: str
+    ) -> RepositorySnapshot | None:
+        """Find an already-recorded snapshot for this pinned commit.
+
+        The primary key is a hash, but the table also constrains
+        (full_name, commit_sha). Those can disagree — the same pinned commit may
+        already be recorded under a different id. Callers that re-derive a
+        snapshot's on-disk location from its id must consult this first, or they
+        will look in a directory that was never created.
+        """
+        return session.execute(
+            select(RepositorySnapshot).where(
+                RepositorySnapshot.full_name == full_name[:240],
+                RepositorySnapshot.commit_sha == commit_sha[:64],
+            )
+        ).scalar_one_or_none()
+
     def upsert_snapshot(self, session: Session, snapshot_id: str, profile: RepoProfile, *, truncated: bool) -> RepositorySnapshot:
         """Record a pinned snapshot. Idempotent on (full_name, commit)."""
         row = session.get(RepositorySnapshot, snapshot_id)
         if row is not None:
             return row
+
+        existing = self.find_snapshot(session, profile.full_name, profile.commit_sha)
+        if existing is not None:
+            return existing
+
         first = min((c.timestamp for c in profile.commits), default=None)
         pushed = (
             dt.datetime.fromtimestamp(first, tz=dt.timezone.utc) if first is not None else None

@@ -136,13 +136,27 @@ def code_dna(
             )
 
     # 4. Renamed-file lineage: same fingerprint, different path.
+    #
+    # Only substantive files count. An empty `__init__.py` is a convention, not
+    # evidence: two unrelated Python projects were reported LIKELY_DERIVED / HIGH
+    # because `tests/testserver/__init__.py` and
+    # `tests/test_apps/blueprintapp/apps/__init__.py` are both empty. Byte
+    # identity between two empty files carries no lineage information at all.
     origin_by_hash = {p.sha256: p for p in origin_prints.values()}
     renamed = []
     for target_p in target_prints.values():
+        if _is_low_information(target_p):
+            continue
         match = origin_by_hash.get(target_p.sha256)
-        if match and match.path != target_p.path:
-            renamed.append((match, target_p))
+        if match is None or match.path == target_p.path:
+            continue
+        if _is_low_information(match):
+            continue
+        renamed.append((match, target_p))
     if renamed:
+        # Prefer the largest match: a shared 400-line module is far stronger
+        # evidence than a shared three-line constant block.
+        renamed.sort(key=lambda pair: pair[1].size, reverse=True)
         match, target_p = renamed[0]
         builder.add(
             _evidence(
@@ -158,6 +172,22 @@ def code_dna(
                 excerpt=_first_line(target_p.path, origin, excerpt_limit),
             )
         )
+
+
+# Files at or below this many non-blank lines are a package marker, a licence
+# stub, or a placeholder. Byte-identity between two of them is an accident of
+# language convention, not a lineage signal.
+_LOW_INFORMATION_LINES = 2
+# A handful of short lines is still boilerplate regardless of line count.
+_LOW_INFORMATION_CHARS = 24
+
+
+def _is_low_information(print_: FileFingerprint) -> bool:
+    """True for files too small or too generic to carry lineage evidence."""
+    if print_.line_count <= _LOW_INFORMATION_LINES:
+        return True
+    # A handful of short lines is still boilerplate regardless of count.
+    return print_.size < _LOW_INFORMATION_CHARS
 
 
 def _rare_shingles(prints: dict[str, FileFingerprint]) -> set[str]:
@@ -214,6 +244,12 @@ def _is_uncommon_constant(value: str) -> bool:
     if stripped in {"0", "1", "-1", "2", "true", "false", "null", "none"}:
         return False
 
+    # Protocol and tooling vocabulary. Two web frameworks in the same ecosystem
+    # share HTTP verbs, headers and MIME types by definition; none of it
+    # indicates that one was derived from the other.
+    if stripped.upper() in _ECOSYSTEM_VOCABULARY:
+        return False
+
     # A bare identifier (`base_url`, `host`) is framework vocabulary, not a
     # magic constant. Require either a non-word character (0x5F3759DF,
     # %s:%d, --flag) or a name that is uncommon by the shared rarity baseline.
@@ -221,6 +257,22 @@ def _is_uncommon_constant(value: str) -> bool:
         return not is_common(stripped)
 
     return True
+
+
+_ECOSYSTEM_VOCABULARY = frozenset(
+    {
+        # HTTP verbs and status classes.
+        "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE",
+        "CONNECT",
+        # Common headers and MIME types.
+        "CONTENT-TYPE", "ACCEPT", "ACCEPT-ENCODING", "COOKIE", "SET-COOKIE",
+        "AUTHORIZATION", "USER-AGENT", "HOST", "CONNECTION", "CACHE-CONTROL",
+        "APPLICATION/JSON", "APPLICATION/X-WWW-FORM-URLENCODED",
+        "TEXT/PLAIN", "TEXT/HTML", "MULTIPART/FORM-DATA",
+        # CLI and config conventions.
+        "UTF-8", "ASCII", "LOCALHOST", "127.0.0.1", "HTTP", "HTTPS", "SSH",
+    }
+)
 
 
 # --- ARCHITECTURE DNA ----------------------------------------------------
@@ -492,6 +544,52 @@ def _fix_commits(profile: RepoProfile) -> list[tuple[int, str]]:
     return out
 
 
+
+# Test names that every project in a language writes. `test_basic` and
+# `test_repr` are pytest convention, not authorship: two unrelated projects
+# were reported LIKELY_DERIVED / HIGH on a shared list of them.
+_GENERIC_TEST_SUFFIXES = frozenset(
+    {
+        "basic", "simple", "main", "init", "setup", "teardown", "empty",
+        "repr", "str", "len", "eq", "equality", "hash", "bool", "iter",
+        "default", "value", "values", "get", "set", "add", "remove",
+        "update", "delete", "create", "read", "write", "list", "dict",
+        "file", "path", "dir", "name", "type", "valid", "invalid", "error",
+        "ok", "fail", "true", "false", "none", "some", "all", "one",
+        "two", "new", "old", "copy", "clone", "reset", "close", "open",
+        "help", "doc", "docs", "version", "config", "option", "args",
+        "kwargs", "returns", "return", "raises", "raise", "call", "called",
+        "works", "works2", "smoke", "sanity", "dummy", "mock", "stub",
+    }
+)
+
+
+def _is_distinctive_test_name(name: str) -> bool:
+    """True only for a test name that is not a language-wide convention.
+
+    A distinctive name must carry domain meaning. A bare `test_basic` says
+    nothing about who wrote it; `test_reconcile_orphaned_transactions` says a
+    great deal. Requiring a domain-bearing segment is what separates the two.
+    """
+
+    if is_common(name) or len(name) < 8:
+        return False
+
+    # Split into the segments of the identifier.
+    parts = [p for p in re.split(r"[^A-Za-z0-9]+", name) if p]
+    segments: list[str] = []
+    for part in parts:
+        segments.extend(re.findall(r"[A-Z]+(?![a-z])|[A-Z][a-z]*|[a-z]+|[0-9]+", part))
+
+    # Every segment generic => convention, not authorship.
+    meaningful = [p for p in parts if p.lower() not in _GENERIC_TEST_SUFFIXES]
+    if not meaningful:
+        return False
+
+    # Require at least one segment long enough to carry domain meaning.
+    return any(len(p) >= 5 for p in meaningful)
+
+
 # --- TEST DNA ------------------------------------------------------------
 
 
@@ -517,7 +615,7 @@ def test_dna(
     shared_names = sorted(o_names & t_names)
     # A distinctive test name that appears in both is strong: nobody
     # independently writes `test_reconcile_orphaned_transactions`.
-    distinctive = [n for n in shared_names if not is_common(n) and len(n) >= 8]
+    distinctive = [n for n in shared_names if _is_distinctive_test_name(n)]
     if distinctive:
         builder.add(
             _evidence(
