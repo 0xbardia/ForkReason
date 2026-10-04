@@ -224,6 +224,9 @@ def test_http_and_protocol_vocabulary_is_not_an_uncommon_constant() -> None:
         "(",
         "),",
         ", ",
+        ", data=b",
+        ".replace(",
+        ", args=",
     ]
     kept = [v for v in ecosystem if _is_uncommon_constant(v)]
     assert kept == [], f"ecosystem vocabulary counted as evidence: {kept}"

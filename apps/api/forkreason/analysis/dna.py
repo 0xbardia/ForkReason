@@ -253,6 +253,12 @@ def _is_uncommon_constant(value: str) -> bool:
     if alnum * 2 < len(stripped) and not _looks_structured(stripped):
         return False
 
+    # A literal that is really a slice of an expression. `, data=b`, `.replace(`
+    # and `, 1), (` all survive the ratio test because they contain a few
+    # alphanumerics, but none of them is a value a person wrote.
+    if _looks_like_code_fragment(stripped) and not _looks_structured(stripped):
+        return False
+
     # Round and sequence numbers. `12345`, `123456`, `10000` and `65536` are
     # test fixtures and default limits that every project writes; a five-digit
     # run of digits is a placeholder far more often than a magic number. Real
@@ -301,8 +307,35 @@ def _looks_structured(value: str) -> bool:
     # command-line flags
     if value.startswith("-") and len(value) > 1 and not value[1].isspace():
         return True
-    # path-like or URL-like values with a recognizable separator
+    # Path-like or URL-like values with a recognizable separator
     if "/" in value or value.count(".") >= 2:
+        return True
+    return False
+
+
+# Code-shaped debris: a value that reads like a fragment of an expression
+# rather than a value someone wrote. `, data=b`, `.replace(` and `, args=`
+# are produced by tokenizing call sites and appear in any two projects that use
+# keyword arguments at all.
+_FRAGMENT_TAIL = ("(", ")", ",", "[", "]", "{", "}", ";", ":", "=")
+_CODE_SHAPED_TAIL = ("(", "[", "{", "=")
+
+
+def _looks_like_code_fragment(value: str) -> bool:
+    """True for a value that is a slice of an expression, not a literal.
+
+    A deliberate literal does not end in an opening bracket or an assignment.
+    """
+    stripped = value.rstrip()
+    if stripped.endswith(_CODE_SHAPED_TAIL):
+        return True
+    # A value whose first meaningful character is punctuation and whose last is
+    # too is a slice of source, not a value: `, data=b`, `(`, `),`.
+    body = stripped.lstrip()
+    if body[:1] in _FRAGMENT_TAIL and body[-1:] in _FRAGMENT_TAIL:
+        return True
+    # A leading delimiter alone is enough: `, data=b` starts a new argument.
+    if body[:1] in _FRAGMENT_TAIL:
         return True
     return False
 
