@@ -1,0 +1,48 @@
+# Environment
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+out/
+.pnpm-store/
+*.tsbuildinfo
+next-env.d.ts
+
+# Test artifacts
+playwright-report/
+test-results/
+screenshots/
+coverage/
+*.playwright-artifacts/
+
+# Local data and caches
+data/
+/var/lib/forkreason/
+artifacts/*.json
+!artifacts/.gitkeep
+*.sqlite3
+*.db
+
+# Temporary analysis output
+/tmp/
+.snapshots/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
