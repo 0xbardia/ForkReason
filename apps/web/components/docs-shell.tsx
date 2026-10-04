@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 export interface DocSection {
   title: string;
@@ -71,20 +71,23 @@ export const DOC_GROUPS: DocGroup[] = [
 export const DOC_SECTIONS = DOC_GROUPS.flatMap((group) => group.sections);
 
 export function DocsShell({
-  sections,
+  groups: groupsProp,
   current,
+  children,
 }: {
-  sections: DocSection[];
+  groups?: DocGroup[];
   current?: string;
+  children?: ReactNode;
 }) {
   const pathname = usePathname();
   const [query, setQuery] = useState("");
   const [navOpen, setNavOpen] = useState(false);
 
   const groups = useMemo(() => {
+    const source = groupsProp ?? DOC_GROUPS;
     const needle = query.trim().toLowerCase();
-    if (!needle) return DOC_GROUPS;
-    return DOC_GROUPS.map((group) => ({
+    if (!needle) return source;
+    return source.map((group) => ({
       ...group,
       sections: group.sections.filter(
         (section) =>
@@ -92,9 +95,7 @@ export function DocsShell({
           (section.blurb ?? "").toLowerCase().includes(needle),
       ),
     })).filter((group) => group.sections.length > 0);
-  }, [query]);
-
-  const matched = sections.length > 0 ? sections : undefined;
+  }, [query, groupsProp]);
 
   return (
     <div className="docs-layout">
@@ -155,11 +156,7 @@ export function DocsShell({
         </nav>
       </aside>
 
-      <article className="docs-content">
-        {matched ? null : (
-          <p className="docs-content-placeholder eyebrow">ForkReason documentation</p>
-        )}
-      </article>
+      <article className="docs-content">{children}</article>
     </div>
   );
 }

@@ -23,7 +23,11 @@ function createNonce(): string {
 export function middleware(request: NextRequest) {
   const nonce = createNonce();
   const isDev = process.env.NODE_ENV !== "production";
-  const apiOrigin = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "";
+  // NEXT_PUBLIC_* values are inlined at build time. If unset, fall back to the
+  // public API path rather than emitting an empty CSP source, which is itself a
+  // parse error.
+  const apiOrigin =
+    process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "";
 
   const csp = [
     "default-src 'self'",
@@ -33,11 +37,12 @@ export function middleware(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    // The API origin must be explicitly allowed. It is usually same-origin in
-    // production (nginx proxies /api), but in development the browser calls
-    // port 8421 directly, and omitting it produced a CSP refusal that looked
-    // like a backend outage.
-    `connect-src 'self' ${apiOrigin} https://studio.genlayer.com https://rpc-bradbury.genlayer.com https://rpc-asimov.genlayer.com wss://relay.walletconnect.com wss://*.walletconnect.com`,
+    // The API origin must be explicitly allowed. In production nginx proxies
+    // /api so it is same-origin; in development the browser calls port 8421
+    // directly, and omitting it produced a CSP refusal that looked like a
+    // backend outage. A trailing double space is avoided so the directive
+    // parses cleanly either way.
+    `connect-src 'self' ${apiOrigin} https://studio.genlayer.com https://rpc-bradbury.genlayer.com https://rpc-asimov.genlayer.com wss://relay.walletconnect.com wss://*.walletconnect.com`.replace(/\s+/g, " ").trim(),
     "frame-src 'self' https://verify.walletconnect.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",

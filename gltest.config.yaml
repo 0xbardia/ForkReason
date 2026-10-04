@@ -1,24 +1,27 @@
 # GenLayer test configuration.
 #
-# Direct Mode does not need a network at all — it runs the contract natively.
-# The default network here is only used by Studio Mode (integration) tests.
+# Direct Mode needs no network at all — it runs the contract natively.
+# The networks below are only used by Studio Mode (integration) tests.
 #
-#   Direct Mode:  .venv/bin/gltest contracts/tests/test_registry_direct.py -v
-#   Studio Mode:  .venv/bin/gltest contracts/tests/ -m integration -v
-#                 (requires `genlayer init` && `genlayer up`, Docker 26+)
+#   Direct Mode:  .venv/bin/gltest contracts/tests/test_registry_direct.py -q
+#
+#   Studio Mode (GLSim, no Docker required) — this is what V1 certification uses:
+#     glsim --port 4000 --validators 5 --max-rotations 3 \
+#           --llm-provider openai:gpt-4o-mini --no-browser --seed 42
+#     .venv/bin/gltest contracts/tests/ -m integration -v -s
+#
+# `--leader-only` is deliberately never used: it silently no-ops off Studio-based
+# RPCs and would bypass the validator committee, which is the entire point of a
+# Studio Mode run.
 
-networks:
-  default: studionet
-
-  # Local GenLayer Studio. Requires `genlayer init` then `genlayer up`.
-  localnet:
-    url: "http://127.0.0.1:4000/api"
-
-  # Hosted GenLayer Studio (https://studio.genlayer.com/api).
-  studionet: {}
-
-  # Public GenLayer testnet.
-  testnet_bradbury: {}
+# The `networks` key is deliberately omitted. gltest's loader REPLACES its
+# preconfigured network set with whatever this file declares, so declaring only
+# `default: localnet` would leave zero networks configured ("Unknown network:
+# localnet, possible values: []"). With no `networks` key at all, gltest uses its
+# own defaults: `localnet` (chain id 61127, ten generated test accounts, RPC
+# http://127.0.0.1:4000/api) — which is exactly what GLSim serves.
+#
+# Verified: genlayer_py.chains.localnet.SIMULATOR_JSON_RPC_URL == glsim --port 4000
 
 paths:
   contracts: "contracts"

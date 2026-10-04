@@ -8,6 +8,8 @@ import "@fontsource-variable/jetbrains-mono";
 import "@/styles/globals.css";
 import "@/styles/components.css";
 import "@/styles/pages.css";
+import "@/styles/case.css";
+import "@/styles/docs.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(

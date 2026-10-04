@@ -1,48 +1,47 @@
+!.env.example
+!artifacts/.gitkeep
 # Environment
+# Local data and caches
+# Node
+# OS / editor
+# Python
+# Temporary analysis output
+# Test artifacts
+**/__pycache__/
+*.db
+*.egg-info/
+*.log
+*.playwright-artifacts/
+*.py[cod]
+*.pyc
+*.sqlite3
+*.swp
+*.tsbuildinfo
+.DS_Store
 .env
 .env.*
-!.env.example
-.venv/
-venv/
-
-# Python
-__pycache__/
-*.py[cod]
-.pytest_cache/
-*.egg-info/
-.mypy_cache/
-.ruff_cache/
-
-# Node
-node_modules/
-.next/
-out/
-.pnpm-store/
-*.tsbuildinfo
-next-env.d.ts
-
-# Test artifacts
-playwright-report/
-test-results/
-screenshots/
-coverage/
-*.playwright-artifacts/
-
-# Local data and caches
-data/
-/var/lib/forkreason/
-artifacts/*.json
-!artifacts/.gitkeep
-*.sqlite3
-*.db
-
-# Temporary analysis output
-/tmp/
-.snapshots/
-
-# OS / editor
-.DS_Store
-Thumbs.db
-*.swp
 .idea/
+.mypy_cache/
+.next/
+.pnpm-store/
+.pytest_cache/
+.ruff_cache/
+.snapshots/
+.venv/
 .vscode/
+/tmp/
+/var/lib/forkreason/
+Thumbs.db
+__pycache__/
+artifacts/
+artifacts/*.json
+artifacts/screens/
+coverage/
+data/
+next-env.d.ts
+node_modules/
+out/
+playwright-report/
+screenshots/
+test-results/
+venv/
