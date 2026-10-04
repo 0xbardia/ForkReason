@@ -356,6 +356,19 @@ def fetch_repo_metadata(
         except ValueError:
             pushed_ts = None
 
+    # The repository's true creation time. Chronology cannot be derived from the
+    # commit log we read, because that log is capped and describes only recent
+    # history; this is the only honest source for "which repository came first".
+    created_ts: int | None = None
+    raw_created = data.get("created_at")
+    if raw_created:
+        from datetime import datetime
+
+        try:
+            created_ts = int(datetime.fromisoformat(str(raw_created).replace("Z", "+00:00")).timestamp())
+        except ValueError:
+            created_ts = None
+
     metadata = RepoMetadata(
         ref=ref,
         commit_sha=str(commit_sha)[:64],
@@ -365,6 +378,7 @@ def fetch_repo_metadata(
         parent_full_name=str(parent_full_name)[:240] if parent_full_name else None,
         size_bytes=int(data.get("size") or 0) * 1024,
         pushed_at=pushed_ts,
+        created_at=created_ts,
     )
 
     if metadata.size_bytes == 0:

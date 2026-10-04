@@ -72,12 +72,19 @@ class ProfileStore:
     def upsert_snapshot(self, session: Session, snapshot_id: str, profile: RepoProfile, *, truncated: bool) -> RepositorySnapshot:
         """Record a pinned snapshot. Idempotent on (full_name, commit)."""
         row = session.get(RepositorySnapshot, snapshot_id)
+        if row is None:
+            row = self.find_snapshot(session, profile.full_name, profile.commit_sha)
         if row is not None:
+            # A row written before `repo_created_at` existed can still be
+            # completed from the metadata we just fetched. Leaving it NULL would
+            # silently drop every chronology claim about that repository, because
+            # the bounded commit log cannot stand in for a creation time.
+            if row.repo_created_at is None and profile.first_commit_at is not None:
+                row.repo_created_at = dt.datetime.fromtimestamp(
+                    profile.first_commit_at, tz=dt.timezone.utc
+                )
+                session.flush()
             return row
-
-        existing = self.find_snapshot(session, profile.full_name, profile.commit_sha)
-        if existing is not None:
-            return existing
 
         first = min((c.timestamp for c in profile.commits), default=None)
         pushed = (
@@ -94,6 +101,13 @@ class ProfileStore:
             is_fork=bool(profile.is_fork),
             parent_full_name=(profile.parent_full_name or None),
             pushed_at=pushed,
+            repo_created_at=(
+                dt.datetime.fromtimestamp(
+                    profile.first_commit_at, tz=dt.timezone.utc
+                )
+                if profile.first_commit_at is not None
+                else None
+            ),
             size_bytes=sum(f.size for f in profile.files),
             file_count=len(profile.files),
             truncated=bool(truncated),
@@ -381,6 +395,7 @@ def _metadata_from_row(row: RepositorySnapshot):
         parent_full_name=row.parent_full_name,
         size_bytes=row.size_bytes,
         pushed_at=int(row.pushed_at.timestamp()) if row.pushed_at else None,
+        created_at=int(row.repo_created_at.timestamp()) if row.repo_created_at else None,
     )
 
 

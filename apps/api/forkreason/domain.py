@@ -101,6 +101,14 @@ class RepoProfile:
     description: str = ""
     is_fork: bool = False
     parent_full_name: str | None = None
+    # The repository's true creation timestamp, from the hosting provider rather
+    # than from the commit log we read. `commits` is capped by
+    # ANALYSIS_MAX_COMMITS and so holds only the most recent history: a
+    # repository with 20,000 commits reports the first commit it falls inside
+    # that window, not its actual first commit. Any chronology reasoning that
+    # depends on "which repository came first" must use this field instead, or it
+    # will confidently compare two arbitrary recent commits and call it history.
+    first_commit_at: int | None = None
 
     def file_by_path(self, path: str) -> FileEntry | None:
         for f in self.files:

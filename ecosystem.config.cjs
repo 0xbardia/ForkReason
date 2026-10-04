@@ -41,6 +41,31 @@ function readEnv(file) {
 
 const env = readEnv(path.join(ROOT, ".env"));
 
+// Resolve a GitHub token from the environment first, then .env, then the `gh`
+// CLI's own store. Production was running with an empty GITHUB_TOKEN: .env had
+// the key with no value, so the API went out unauthenticated and inherited
+// GitHub's 60 requests/hour anonymous limit instead of 5000. Under load that
+// surfaced as `github_rate_limited` on ordinary repository validation. Falling
+// back to `gh` keeps the deployment authenticated without duplicating a secret
+// in a second place, and without ever writing it to a file here.
+function resolveGithubToken() {
+  const fromProcess = process.env.GITHUB_TOKEN;
+  if (fromProcess && fromProcess.trim()) return fromProcess.trim();
+  const fromFile = env.GITHUB_TOKEN;
+  if (fromFile && fromFile.trim()) return fromFile.trim();
+  try {
+    const hosts = fs.readFileSync(
+      path.join(process.env.HOME || "/root", ".config/gh/hosts.yml"),
+      "utf8"
+    );
+    const match = hosts.match(/oauth_token:\s*(\S+)/);
+    if (match) return match[1];
+  } catch {
+    // gh is not installed or not authenticated; fall through.
+  }
+  return "";
+}
+
 // A process-scoped Studio Mode proxy must never leak into production: PM2's
 // daemon inherits whatever shell started it, and a stray HTTPS_PROXY silently
 // breaks every outbound call the API makes (GitHub validation failed exactly
@@ -81,7 +106,7 @@ const appEnv = {
   API_PORT: "8421",
   CORS_ORIGINS: env.CORS_ORIGINS || "https://forkreason.bydx.fun",
   TRUSTED_PROXIES: "127.0.0.1,::1",
-  GITHUB_TOKEN: env.GITHUB_TOKEN || "",
+  GITHUB_TOKEN: resolveGithubToken(),
   GITHUB_API_BASE_URL: env.GITHUB_API_BASE_URL || "https://api.github.com",
 };
 

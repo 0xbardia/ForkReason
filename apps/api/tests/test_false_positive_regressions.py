@@ -221,3 +221,64 @@ def test_genuine_magic_constants_still_count() -> None:
     ]
     dropped = [v for v in real if not _is_uncommon_constant(v)]
     assert dropped == [], f"genuine constants were discarded: {dropped}"
+
+# --- 4. Chronology must not depend on which side the user typed first ----
+
+
+def test_verdict_does_not_depend_on_argument_order() -> None:
+    """Swapping origin and target must not change the direction claim.
+
+    This is the defect that made ForkReason untrustworthy in a way no user
+    could detect: `pallets/click` vs `fastapi/typer` returned LIKELY_DERIVED /
+    HIGH in one direction and INDEPENDENT in the other. The cause was reading
+    the earliest commit out of a log capped at ANALYSIS_MAX_COMMITS, so the two
+    repositories' bounded windows started at different dates and chronology
+    read meaning into the difference. Chronology now uses the provider's
+    creation time and is symmetric.
+    """
+    from forkreason.analysis.dna import history_dna
+
+    day = 86_400
+    base = 1_600_000_000
+
+    click = _profile("pallets/click", [_fp("click/core.py", "def run():\n    pass\n")])
+    typer = _profile("fastapi/typer", [_fp("typer/main.py", "def main():\n    pass\n")])
+
+    # Give click the earlier creation: the target cannot have come from it.
+    object.__setattr__(click, "first_commit_at", base)
+    object.__setattr__(typer, "first_commit_at", base + 400 * day)
+
+    forward = EvidenceBuilder(limit=20)
+    history_dna(click, typer, forward, 600)
+    reverse = EvidenceBuilder(limit=20)
+    history_dna(typer, click, reverse, 600)
+
+    fwd_types = _types(forward)
+    rev_types = _types(reverse)
+
+    # Typer (later) compared against click (earlier): nothing rules derivation out.
+    assert "target_predates_origin" not in fwd_types
+
+    # Click (earlier) compared against typer (later): this DOES rule it out,
+    # and the signal must survive so the answer does not depend on typing order.
+    assert "target_predates_origin" in rev_types
+    assert "origin_predates_target" in fwd_types
+
+
+def test_chronology_claims_nothing_when_creation_time_is_unknown() -> None:
+    """An unknown creation time must produce no direction claim.
+
+    Guessing from a capped log is exactly the bug this replaced, so with no
+    honest source the honest answer is silence.
+    """
+    from forkreason.analysis.dna import history_dna
+
+    older = _profile("acme/older", [_fp("a/mod.py", "x = 1\n")])
+    newer = _profile("acme/newer", [_fp("b/mod.py", "x = 1\n")])
+    # first_commit_at stays None for both.
+
+    builder = EvidenceBuilder(limit=20)
+    history_dna(older, newer, builder, 600)
+
+    claimed = _types(builder) & {"target_predates_origin", "origin_predates_target"}
+    assert claimed == set(), f"direction claimed without a creation time: {claimed}"

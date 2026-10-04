@@ -56,6 +56,11 @@ class RepositorySnapshot(Base):
     is_fork: Mapped[bool] = mapped_column(Boolean, default=False)
     parent_full_name: Mapped[str | None] = mapped_column(String(240))
     pushed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    # When the repository itself was created, per the forge. Distinct from
+    # `created_at`, which is when this row was written: chronology needs the
+    # repository's age, and the commit log we read is capped so its first entry
+    # is not the repository's first commit.
+    repo_created_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     size_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
     file_count: Mapped[int] = mapped_column(Integer, default=0)
     truncated: Mapped[bool] = mapped_column(Boolean, default=False)

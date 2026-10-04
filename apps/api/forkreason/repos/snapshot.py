@@ -86,6 +86,11 @@ class RepoMetadata:
     parent_full_name: str | None
     size_bytes: int
     pushed_at: int | None
+    # GitHub's `created_at` for the repository: the true moment the repository
+    # came into existence. Chronology reasoning cannot use the commit log we
+    # read, because that log is capped at ANALYSIS_MAX_COMMITS and therefore
+    # describes only the most recent history.
+    created_at: int | None = None
 
 
 # --- git invocation ------------------------------------------------------
@@ -299,6 +304,7 @@ def build_profile(
         description=metadata.description,
         is_fork=metadata.is_fork,
         parent_full_name=metadata.parent_full_name,
+        first_commit_at=metadata.created_at,
     )
     return profile, truncated
 
@@ -491,6 +497,7 @@ def profile_from_cache(meta_path: Path) -> RepoProfile | None:
             description=data.get("description", ""),
             is_fork=bool(data.get("is_fork")),
             parent_full_name=data.get("parent_full_name"),
+            first_commit_at=data.get("first_commit_at"),
         )
     except (KeyError, TypeError, ValueError):
         return None
@@ -512,6 +519,9 @@ def cache_profile_metadata(
         "description": profile.description,
         "is_fork": profile.is_fork,
         "parent_full_name": profile.parent_full_name,
+        # Kept separately from the commit log: the log is capped, so its first
+        # entry is not the repository's first commit.
+        "first_commit_at": profile.first_commit_at,
         "truncated": truncated,
         "files": [
             {

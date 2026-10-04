@@ -353,7 +353,16 @@ def _module_names(profile: RepoProfile) -> set[str]:
 def history_dna(
     origin: RepoProfile, target: RepoProfile, builder: EvidenceBuilder, excerpt_limit: int
 ) -> None:
-    """Commit chronology, first occurrence, implementation order."""
+    """Commit chronology, first occurrence, implementation order.
+
+    Direction-sensitive reasoning here runs on the provider's repository
+    creation time, never on the bounded commit log. Reading the first commit out
+    of a capped log means comparing two arbitrary recent commits and calling it
+    history, and it made the verdict depend on which repository the user typed
+    first: `pallets/click` vs `fastapi/typer` produced LIKELY_DERIVED in one
+    direction and INDEPENDENT in the other, purely because the two windows
+    happened to start at different dates.
+    """
     if not origin.commits or not target.commits:
         return
 
@@ -365,23 +374,46 @@ def history_dna(
     o_first, o_last = origin_span
     t_first, t_last = target_span
 
-    # Temporal direction. A target that predates the origin cannot have been
-    # derived from it; this is the cheapest and most decisive negative signal.
-    if t_first < o_first:
+    # Temporal direction, from honest repository creation times.
+    o_created = _first_activity(origin)
+    t_created = _first_activity(target)
+    if o_created is not None and t_created is not None and t_created < o_created:
         builder.add(
             _evidence(
                 "HISTORY",
                 "target_predates_origin",
                 0.8,
-                "The target repository's earliest commit predates the origin's. "
-                "The target cannot have been derived from the origin.",
+                "The target repository existed before the origin repository was "
+                "created. The target cannot have been derived from the origin.",
                 origin,
                 target,
-                excerpt=f"origin first commit {_iso(o_first)}, target first commit {_iso(t_first)}",
+                excerpt=(
+                    f"origin created {_iso(o_created)}, "
+                    f"target created {_iso(t_created)}"
+                ),
                 counter_signal=True,
             )
         )
         return
+    if o_created is not None and t_created is not None and o_created < t_created:
+        # Permissive in the reverse direction too: the same pair compared the
+        # other way round must not lose the fact that the origin came first.
+        builder.add(
+            _evidence(
+                "HISTORY",
+                "origin_predates_target",
+                0.2,
+                "The origin repository existed before the target was created, "
+                "which is consistent with the target following it. Chronology "
+                "alone does not establish derivation.",
+                origin,
+                target,
+                excerpt=(
+                    f"origin created {_iso(o_created)}, "
+                    f"target created {_iso(t_created)}"
+                ),
+            )
+        )
 
     # A target that appeared later is *permissive*, not *evidentiary*. It rules
     # nothing in on its own: two unrelated projects started a year apart look
@@ -422,6 +454,24 @@ def history_dna(
                     excerpt=", ".join(sorted(shared)[:10]),
                 )
             )
+
+
+def _first_activity(profile: RepoProfile) -> int | None:
+    """The repository's true first activity, when it is honestly known.
+
+    `profile.commits` is capped by ANALYSIS_MAX_COMMITS, so its earliest
+    timestamp is the earliest commit *inside that window* — for a repository
+    with thousands of commits that is an arbitrary recent date, not its
+    beginning. Two repositories compared in one direction could therefore have
+    their recent histories appear to run in opposite orders, which produced
+    `target_predates_origin` in one direction and nothing in the reverse. The
+    provider's `created_at` is the only field that means "when this repository
+    came into existence", so that is what chronology uses. When it is unknown we
+    return None rather than guessing from a truncated log.
+    """
+    if profile.first_commit_at is not None:
+        return profile.first_commit_at
+    return None
 
 
 def _span(profile: RepoProfile) -> tuple[int, int] | None:
