@@ -1,13 +1,23 @@
+# GenLayer test configuration.
+#
+# Direct Mode does not need a network at all — it runs the contract natively.
+# The default network here is only used by Studio Mode (integration) tests.
+#
+#   Direct Mode:  .venv/bin/gltest contracts/tests/test_registry_direct.py -v
+#   Studio Mode:  .venv/bin/gltest contracts/tests/ -m integration -v
+#                 (requires `genlayer init` && `genlayer up`, Docker 26+)
+
 networks:
-  default: direct
+  default: studionet
 
-  direct: {}
-
+  # Local GenLayer Studio. Requires `genlayer init` then `genlayer up`.
   localnet:
     url: "http://127.0.0.1:4000/api"
 
+  # Hosted GenLayer Studio (https://studio.genlayer.com/api).
   studionet: {}
 
+  # Public GenLayer testnet.
   testnet_bradbury: {}
 
 paths:
