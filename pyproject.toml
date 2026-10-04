@@ -42,6 +42,10 @@ contract = [
     # not declare it, so a clean install fails at contract load time with
     # "No module named 'numpy'". Declared here so a fresh clone works.
     "numpy>=1.26",
+    # Provides the `genvm-lint` binary used as a release gate. It was installed
+    # in the canonical venv but declared nowhere, so a fresh clone could not run
+    # one of the three contract gates the documentation lists.
+    "genvm-linter>=0.11.1rc2",
 ]
 
 [build-system]
