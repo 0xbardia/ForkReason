@@ -7,8 +7,22 @@
  * the UI can branch on it instead of matching message strings.
  */
 
+/**
+ * In production the API is same-origin: nginx proxies /api to the API process,
+ * so an empty base means "call /api/v1/...". That is also the CSP-safe choice,
+ * because the browser then needs no cross-origin grant at all.
+ *
+ * The dev fallback only applies when running outside production, so a
+ * production bundle can never bake a localhost origin into client JavaScript.
+ */
+const configured = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+
 export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8421";
+  configured && configured.length > 0
+    ? configured
+    : process.env.NODE_ENV === "production"
+      ? ""
+      : "http://localhost:8421";
 
 export class ApiClientError extends Error {
   readonly code: string;

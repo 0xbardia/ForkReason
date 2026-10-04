@@ -45,3 +45,4 @@ playwright-report/
 screenshots/
 test-results/
 venv/
+logs/
