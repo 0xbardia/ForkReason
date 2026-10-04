@@ -559,18 +559,47 @@ def history_dna(
         )
 
     # Commit-message vocabulary overlap.
-    o_msgs = _message_terms(origin)
-    t_msgs = _message_terms(target)
+    #
+    # This signal is CORROBORATIVE ONLY and is deliberately capped low. Commit
+    # messages are prose written by many people over years, so ordinary English
+    # words appear in both repositories for reasons that have nothing to do
+    # with lineage: `pallets/werkzeug` and `psf/requests` shared 151 terms at
+    # 0.80 HIGH — `action`, `additional`, `annotation`, `application`,
+    # `attribute`, `auth` — which was enough to overturn a chronology that had
+    # already established the direction and produce HEAVILY_DERIVED for two
+    # unrelated projects.
+    #
+    # Stopword filtering and per-repository frequency gating were both tried and
+    # both failed: these terms genuinely are rare inside each repository
+    # (0.2%-0.7% of messages), so rarity alone cannot separate a shared domain
+    # term from a shared English one. No corpus library is available to derive a
+    # principled baseline, and hand-maintaining a word list is a losing game.
+    #
+    # So the signal is demoted instead: it may raise confidence in a verdict that
+    # other layers already support, and it can never on its own carry a
+    # derivation claim. A reviewer who wants strong evidence sees it in CODE,
+    # BUG and ARCHITECTURE, where the signals are structural rather than verbal.
+    o_counts = _message_term_counts(origin)
+    t_counts = _message_term_counts(target)
+    o_msgs = set(o_counts)
+    t_msgs = set(t_counts)
     if o_msgs and t_msgs:
-        shared = {m for m in (o_msgs & t_msgs) if not is_common(m)}
+        o_total = max(1, len(origin.commits))
+        t_total = max(1, len(target.commits))
+        shared = {
+            m
+            for m in (o_msgs & t_msgs)
+            if o_counts[m] / o_total <= 0.05 and t_counts[m] / t_total <= 0.05
+        }
         if len(shared) >= 3:
             builder.add(
                 _evidence(
                     "HISTORY",
                     "commit_message_vocabulary",
-                    min(0.8, 0.35 + len(shared) * 0.05),
-                    f"{len(shared)} distinctive commit-message term(s) overlap, "
-                    "which is unlikely for independent development.",
+                    min(0.3, 0.15 + len(shared) * 0.005),
+                    f"{len(shared)} commit-message term(s) are shared. This "
+                    "corroborates a finding but cannot establish one: commit "
+                    "prose overlaps between unrelated projects.",
                     origin,
                     target,
                     excerpt=", ".join(sorted(shared)[:10]),
@@ -603,12 +632,53 @@ def _span(profile: RepoProfile) -> tuple[int, int] | None:
     return min(stamps), max(stamps)
 
 
-def _message_terms(profile: RepoProfile) -> set[str]:
-    terms: set[str] = set()
+def _message_term_counts(profile: RepoProfile) -> dict[str, int]:
+    """How many of this repository's commit messages contain each term."""
+    counts: dict[str, int] = {}
     for c in profile.commits:
-        for tok in re.findall(r"[A-Za-z][A-Za-z0-9_-]{3,}", c.message.lower()):
-            terms.add(tok)
-    return terms
+        for tok in {
+            t for t in re.findall(r"[A-Za-z][A-Za-z0-9_-]{3,}", c.message.lower())
+            if t not in _COMMIT_MESSAGE_STOPWORDS and not is_common(t)
+        }:
+            counts[tok] = counts.get(tok, 0) + 1
+    return counts
+
+
+def _message_terms(profile: RepoProfile) -> set[str]:
+    return set(_message_term_counts(profile))
+
+
+# Commit messages are prose, so they are dominated by ordinary English and by
+# the conventional phrasing of version control. `COMMON_BOILERPLATE_TOKENS` is a
+# code baseline and contains almost none of it, which let `about`, `action`,
+# `add`, `allow` and `apply` be reported as distinctive shared vocabulary:
+# `pallets/werkzeug` and `psf/requests` accumulated 151 such terms and scored 0.80
+# HIGH, overriding a chronology that had already established the direction and
+# producing HEAVILY_DERIVED for two unrelated projects.
+_COMMIT_MESSAGE_STOPWORDS = frozenset(
+    """
+    about above after again against along also always among another any are
+    because been before being below between both but can cannot could did
+    does doing done down during each either else even ever every from further
+    get give given had has have having her here hers him his how however into
+    its itself just like made make many may might more most much must never
+    next none only other our ours out over own same she should since some such
+    than that their theirs them then there these they this those through thus
+    under until upon use used using very was way were what when where whether
+    which while who whom whose will with within without would your yours
+    add adds added adding update updates updated updating fix fixes fixed
+    fixing bump bumps bumped remove removes removed removing rename renames
+    renamed renaming revert reverts reverted reverting initial init commit
+    commits wip cleanup clean up back merge merges merged merging cherry pick
+    revert typo typos docs doc readme changelog release version bump depend
+    deps deps2 support supports supported introduce introduces introduced
+    refactor refactors refactored refactoring improve improves improved
+    improve simplify simplifies simplified change changes changed changing
+    enable enables enabled disable disables disabled allow allows allowed
+    apply applies applied return returns returned handle handles handled
+    test tests tested check checks checked move moves moved moving allow
+    """.split()
+)
 
 
 # --- BUG DNA -------------------------------------------------------------

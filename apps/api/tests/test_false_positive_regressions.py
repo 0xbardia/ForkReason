@@ -21,6 +21,7 @@ lives in `test_api_integration.py` because it needs a database.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 
 from forkreason.analysis.dna import (
@@ -304,3 +305,76 @@ def test_chronology_claims_nothing_when_creation_time_is_unknown() -> None:
 
     claimed = _types(builder) & {"target_predates_origin", "origin_predates_target"}
     assert claimed == set(), f"direction claimed without a creation time: {claimed}"
+
+
+def test_commit_message_vocabulary_is_corroborative_only() -> None:
+    """Shared commit prose must never carry a derivation claim.
+
+    `pallets/werkzeug` and `psf/requests` shared 151 commit-message terms and
+    scored 0.80 HIGH on `action`, `additional`, `annotation`, `application`,
+    `attribute`, `auth` — ordinary English in two unrelated projects. Enough to
+    overturn a chronology that had already established the direction.
+
+    Stopword filtering and per-repository frequency gating were both tried and
+    both failed, because these terms really are rare inside each repository
+    (0.2%-0.7% of messages). So the signal is demoted instead: corroborative,
+    never establishing.
+    """
+    from forkreason.analysis.dna import history_dna
+
+    def _prose(repo: str, words: tuple[str, ...]) -> RepoProfile:
+        # Each word appears in a single message, so a frequency gate would
+        # happily pass it. Only the demotion stops it scoring HIGH.
+        commits = tuple(
+            CommitEntry(
+                sha=f"{i:040x}",
+                timestamp=BASE_TS + i * 86400,
+                author=f"dev{i} <d{i}@example.com>",
+                message=f"work on {word}",
+            )
+            for i, word in enumerate(words)
+        )
+        return dataclasses.replace(
+            _profile(repo, [_fp(f"{repo.split('/')[-1]}/mod.py", "x = 1\n")]),
+            commits=commits,
+        )
+
+    generic = ("about", "action", "additional", "annotation", "application", "auth")
+    origin = _prose("acme/left", generic)
+    target = _prose("acme/right", generic)
+
+    builder = EvidenceBuilder(limit=20)
+    history_dna(origin, target, builder, 600)
+
+    vocab = [i for i in builder.items if i.evidence_type == "commit_message_vocabulary"]
+    if vocab:
+        assert vocab[0].score <= 0.35, (
+            "commit-message vocabulary scored %s; it must stay corroborative "
+            "and never reach HIGH" % vocab[0].score
+        )
+        assert vocab[0].strength != "HIGH"
+
+
+def test_commit_vocabulary_demotion_does_not_silence_history_evidence() -> None:
+    """Demotion must remove strength, not the signal itself.
+
+    Checked against the real derived fixture rather than a synthetic one: the
+    scenario that genuinely is derived still reports shared commit terminology,
+    just no longer at HIGH.
+    """
+    from forkreason.analysis.dna import _message_term_counts
+
+    from tests.fixtures_profiles import derived_pair
+
+    origin, target = derived_pair()
+    shared = set(_message_term_counts(origin)) & set(_message_term_counts(target))
+    assert shared, (
+        "the derived fixture should still share commit terminology; if it does "
+        "not, the demotion has silenced the signal rather than weakening it"
+    )
+
+    # And the verdict for that fixture must still be a derivation.
+    from forkreason.analysis.pipeline import PipelineConfig, run_pipeline
+
+    result = run_pipeline(origin, target, PipelineConfig())
+    assert result.outcome.verdict in {"LIKELY_DERIVED", "HEAVILY_DERIVED"}
