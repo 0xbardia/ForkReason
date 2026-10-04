@@ -939,6 +939,7 @@ def _evidence(
         origin_ref=origin_ref,
         target_ref=target_ref,
         excerpt=bounded_excerpt(excerpt, excerpt_limit),
+        is_counter_signal=counter_signal,
     )
 
 

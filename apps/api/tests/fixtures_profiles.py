@@ -196,6 +196,9 @@ def derived_pair() -> tuple[RepoProfile, RepoProfile]:
             ("2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e", BASE_TS + 40 * DAY, "ann", "add reconciliation engine"),
             ("3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f", BASE_TS + 120 * DAY, "ann", "fix: correct off-by-one in checkpoint walk"),
         ),
+        # Chronology reads the provider's creation time, not the bounded
+        # commit log, so fixtures must declare it explicitly.
+        first_commit_at=BASE_TS,
     )
     target = RepoProfile(
         full_name="contrib/ledger-engine",
@@ -211,6 +214,9 @@ def derived_pair() -> tuple[RepoProfile, RepoProfile]:
             ("4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f70", BASE_TS + 200 * DAY, "dev", "initial import"),
             ("5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7081", BASE_TS + 205 * DAY, "dev", "rename core to engine"),
         ),
+        # Chronology reads the provider's creation time, not the bounded
+        # commit log, so fixtures must declare it explicitly.
+        first_commit_at=BASE_TS + 200 * DAY,
     )
     return origin, target
 
@@ -304,6 +310,9 @@ def shared_upstream_triple() -> tuple[RepoProfile, RepoProfile, RepoProfile]:
             ("1111111111111111111111111111111111111111", BASE_TS, "up", "initial commit"),
             ("2222222222222222222222222222222222222222", BASE_TS + 30 * DAY, "up", "add chain verification"),
         ),
+        # Chronology reads the provider's creation time, not the bounded
+        # commit log, so fixtures must declare it explicitly.
+        first_commit_at=BASE_TS,
     )
     fork_a = RepoProfile(
         full_name="acme/reconcile-a",
@@ -317,6 +326,9 @@ def shared_upstream_triple() -> tuple[RepoProfile, RepoProfile, RepoProfile]:
             ("3333333333333333333333333333333333333333", BASE_TS + 90 * DAY, "a", "initial commit"),
             ("4444444444444444444444444444444444444444", BASE_TS + 95 * DAY, "a", "add reconciler class"),
         ),
+        # Chronology reads the provider's creation time, not the bounded
+        # commit log, so fixtures must declare it explicitly.
+        first_commit_at=BASE_TS + 90 * DAY,
     )
     fork_b = RepoProfile(
         full_name="acme/reconcile-b",
@@ -330,6 +342,9 @@ def shared_upstream_triple() -> tuple[RepoProfile, RepoProfile, RepoProfile]:
             ("5555555555555555555555555555555555555555", BASE_TS + 100 * DAY, "b", "initial commit"),
             ("6666666666666666666666666666666666666666", BASE_TS + 110 * DAY, "b", "add orphan collector"),
         ),
+        # Chronology reads the provider's creation time, not the bounded
+        # commit log, so fixtures must declare it explicitly.
+        first_commit_at=BASE_TS + 100 * DAY,
     )
     return fork_a, fork_b, upstream
 
@@ -391,6 +406,9 @@ def independent_pair() -> tuple[RepoProfile, RepoProfile]:
             ("7777777777777777777777777777777777777777", BASE_TS + 400 * DAY, "alpha", "initial commit"),
             ("8888888888888888888888888888888888888888", BASE_TS + 410 * DAY, "alpha", "support code fences"),
         ),
+        # Chronology reads the provider's creation time, not the bounded
+        # commit log, so fixtures must declare it explicitly.
+        first_commit_at=BASE_TS + 400 * DAY,
     )
     target = RepoProfile(
         full_name="other/md-beta",
@@ -404,6 +422,9 @@ def independent_pair() -> tuple[RepoProfile, RepoProfile]:
             ("9999999999999999999999999999999999999999", BASE_TS + 500 * DAY, "beta", "initial commit"),
             ("aaaaaaaaaaaaabbbbbbbbbbbbbbbbcccccccccccc", BASE_TS + 505 * DAY, "beta", "tighten heading regex"),
         ),
+        # Chronology reads the provider's creation time, not the bounded
+        # commit log, so fixtures must declare it explicitly.
+        first_commit_at=BASE_TS + 500 * DAY,
     )
     return origin, target
 
@@ -422,6 +443,10 @@ def insufficient_pair() -> tuple[RepoProfile, RepoProfile]:
         commits=_commits(
             ("1234567890abcdef1234567890abcdef12345678", BASE_TS + 800 * DAY, "a", "init"),
         ),
+        # Deliberately unknown: this scenario represents a comparison with no
+        # reliable ordering. Chronology reads the provider's creation time, so
+        # asserting one here would claim an order the scenario must not.
+        first_commit_at=None,
     )
     target = RepoProfile(
         full_name="acme/sparse-b",
@@ -433,6 +458,8 @@ def insufficient_pair() -> tuple[RepoProfile, RepoProfile]:
         commits=_commits(
             ("fedcba0987654321fedcba0987654321fedcba09", BASE_TS + 810 * DAY, "b", "init"),
         ),
+        # Deliberately unknown: see the origin above.
+        first_commit_at=None,
     )
     return origin, target
 

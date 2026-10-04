@@ -68,6 +68,14 @@ def _shift_commits_earlier(profile: RepoProfile, seconds: int) -> RepoProfile:
         description=profile.description,
         is_fork=profile.is_fork,
         parent_full_name=profile.parent_full_name,
+        # Creation time moves with the commits: it describes the same timeline.
+        # Dropping it here silently turned every shifted fixture into an
+        # "unknown chronology" case.
+        first_commit_at=(
+            profile.first_commit_at - seconds
+            if profile.first_commit_at is not None
+            else None
+        ),
     )
 
 
@@ -331,7 +339,9 @@ def test_target_predating_origin_blocks_derivation() -> None:
     early_target = _shift_inverting_timeline(origin, target)
     order, detail = chronological_order(origin, early_target)
     assert order == "TARGET_PREDATES_ORIGIN", f"premise failed: {order}"
-    assert "margin_days" in detail
+    # Chronology states its basis, so a reader can tell a real creation-time
+    # comparison from a guess based on the bounded commit log.
+    assert detail.get("basis") == "repository creation time", detail
 
     result = run_pipeline(origin, early_target, PipelineConfig())
     assert result.outcome.verdict not in {"LIKELY_DERIVED", "HEAVILY_DERIVED"}
@@ -389,7 +399,10 @@ def test_conflicting_evidence_is_preserved() -> None:
     assert result.manifest["conflicting_evidence"]
     for item in result.outcome.conflicting:
         assert item.rationale
-        assert "tension" in item.rationale or "predates" in item.rationale
+        # Every re-labelled item must say why it contradicts the timeline.
+        assert "tension" in item.rationale or "predates" in item.rationale or (
+            "argues against" in item.rationale.lower()
+        )
 
 
 def test_manifest_reports_conflicting_signals() -> None:
@@ -667,7 +680,12 @@ def test_similar_code_with_inverted_timeline_lowers_derivation_score() -> None:
 def test_chronology_handles_sparse_history(full_name, commits_expected) -> None:
     origin, target = insufficient_pair()
     order, _ = chronological_order(origin, target)
-    assert order in {"TARGET_AFTER_ORIGIN_MATURED", "OVERLAPPING", "UNKNOWN"}
+    # Chronology now derives from the provider's creation time, so it reports
+    # exactly one of two orders (or UNKNOWN when that time is unavailable). The
+    # old OVERLAPPING/TARGET_AFTER_ORIGIN_MATURED labels came from reading a
+    # commit log capped at ANALYSIS_MAX_COMMITS, which is why the verdict used to
+    # depend on which repository the user typed first.
+    assert order in {"ORIGIN_PREDATES_TARGET", "TARGET_PREDATES_ORIGIN", "UNKNOWN"}
 
 
 def test_select_verdict_fails_closed_when_nothing_clears_floor() -> None:

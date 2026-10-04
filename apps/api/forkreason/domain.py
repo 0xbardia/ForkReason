@@ -130,6 +130,11 @@ class Evidence:
     origin_ref: dict[str, Any]
     target_ref: dict[str, Any]
     excerpt: str | None = None
+    # True when this finding argues AGAINST derivation rather than for it. A
+    # decisive counter-signal (the target existed before the origin) must be
+    # visible in the conflicting set and must cap the verdict, or the pipeline
+    # reports HEAVILY_DERIVED while holding the very evidence that rules it out.
+    is_counter_signal: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {

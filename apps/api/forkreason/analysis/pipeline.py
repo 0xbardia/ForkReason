@@ -135,9 +135,14 @@ def run_pipeline(
     # A target that predates the origin cannot be derived from it. Anything the
     # similarity layers produced is re-labelled as conflicting rather than
     # deleted: the user must see what argues against the timeline.
-    if chronology == "TARGET_PREDATES_ORIGIN":
+    if chronology == "TARGET_PREDATES_ORIGIN" or any(
+        item.is_counter_signal for item in builder.ranked()):
         for item in builder.ranked():
             if item.evidence_type == "target_predates_origin":
+                continue
+            if item.is_counter_signal:
+                # The counter-signal itself is the explanation, not a similarity
+                # finding to be re-labelled.
                 continue
             conflicting.append(
                 Evidence(

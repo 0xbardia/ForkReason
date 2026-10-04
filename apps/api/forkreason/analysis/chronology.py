@@ -60,38 +60,51 @@ def chronological_order(
     Returns a direction label plus the supporting facts. A target that predates
     the origin is decisive evidence against origin→target derivation, and this
     is checked before any similarity signal is allowed to speak.
-    """
-    o_first = min((c.timestamp for c in origin.commits), default=None)
-    o_last = max((c.timestamp for c in origin.commits), default=None)
-    t_first = min((c.timestamp for c in target.commits), default=None)
-    t_last = max((c.timestamp for c in target.commits), default=None)
 
-    if o_first is None or o_last is None or t_first is None or t_last is None:
+    The comparison uses the provider's repository creation time, not the commit
+    log. The log is capped at ANALYSIS_MAX_COMMITS, so for a repository with
+    more history than that its earliest entry is an arbitrary recent date rather
+    than the repository's beginning — reading order off it produced
+    OVERLAPPING for a pair whose target was years older than its origin, and the
+    decisive counter-signal was then discarded instead of capping the verdict.
+    """
+    o_first = origin.first_commit_at
+    t_first = target.first_commit_at
+    o_span = _span_of(origin)
+    t_span = _span_of(target)
+
+    if o_first is None or t_first is None:
+        # Without an honest creation time there is no direction claim to make.
+        # Reporting UNKNOWN is the truthful answer; guessing from a bounded log
+        # is what produced order-dependent verdicts.
         return "UNKNOWN", {
-            "reason": "One or both repositories have no usable commit history.",
+            "reason": (
+                "Repository creation time is unavailable, so the order cannot be "
+                "established from the bounded commit history."
+            ),
+            "origin_first_commit_in_window": _ts(o_span[0]) if o_span else None,
+            "target_first_commit_in_window": _ts(t_span[0]) if t_span else None,
         }
 
     if t_first < o_first:
         return "TARGET_PREDATES_ORIGIN", {
-            "origin_first": _ts(o_first),
-            "target_first": _ts(t_first),
-            "margin_days": abs(t_first - o_first) // 86400,
+            "origin_created": _ts(o_first),
+            "target_created": _ts(t_first),
+            "basis": "repository creation time",
         }
 
-    if t_first >= o_last:
-        return "TARGET_AFTER_ORIGIN_MATURED", {
-            "origin_first": _ts(o_first),
-            "origin_last": _ts(o_last),
-            "target_first": _ts(t_first),
-            "margin_days": (t_first - o_last) // 86400,
-        }
-
-    return "OVERLAPPING", {
-        "origin_first": _ts(o_first),
-        "origin_last": _ts(o_last),
-        "target_first": _ts(t_first),
-        "target_last": _ts(t_last),
+    return "ORIGIN_PREDATES_TARGET", {
+        "origin_created": _ts(o_first),
+        "target_created": _ts(t_first),
+        "basis": "repository creation time",
     }
+
+
+def _span_of(profile: RepoProfile) -> tuple[int, int] | None:
+    if not profile.commits:
+        return None
+    stamps = [c.timestamp for c in profile.commits]
+    return min(stamps), max(stamps)
 
 
 @dataclass(frozen=True, slots=True)
