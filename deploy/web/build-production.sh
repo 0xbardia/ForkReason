@@ -13,7 +13,9 @@
 # bundle, and it always leaves the bundle assembled.
 set -euo pipefail
 
-WEB_DIR="${1:-/root/ForkReason/apps/web}"
+# Default to the checkout this script lives in, not a fixed path, so the
+# build works from any clone.
+WEB_DIR="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/apps/web}"
 cd "$WEB_DIR"
 
 echo "==> next build"

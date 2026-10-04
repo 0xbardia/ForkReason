@@ -48,6 +48,17 @@ contract = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+# Required because the `contract` extra pins `genlayer-test` to a git tag.
+# hatchling refuses to build metadata for an optional-dependency group
+# containing a direct URL reference unless this is explicitly enabled, which
+# made the documented `pip install -e '.[dev]'` fail outright on a fresh clone:
+#   ValueError: Dependency #1 of option `contract` ... cannot be a direct
+#   reference unless field `tool.hatch.metadata.allow-direct-references` is set
+# The canonical tree only ever worked because its venv had been built before
+# this extra was introduced.
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["apps/api/forkreason"]
 

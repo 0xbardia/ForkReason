@@ -16,6 +16,7 @@ whose CA is injected into GLSim alone via REQUESTS_CA_BUNDLE.
 
 import http.server
 import select
+import pathlib
 import socket
 import ssl
 import sys
@@ -29,8 +30,16 @@ STUB_PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8089
 # the wrong place.
 INTERCEPT_HOSTS = {"api.openai.com"}
 
-CERT = "/root/ForkReason/deploy/studio/certs/cert.pem"
-KEY = "/root/ForkReason/deploy/studio/certs/key.pem"
+# Resolved from this file's own location, never hardcoded to a checkout path.
+# run-studio.sh rotates this certificate on every run, so a fixed absolute path
+# meant a clone outside /root/ForkReason generated a new key and certificate
+# while the proxy loaded the canonical tree's stale pair — a cert/key mismatch
+# that failed inside TLS with "Bad file descriptor" and surfaced as an opaque
+# contract revert during Studio Mode. Making it relative means the harness works
+# from any checkout, which is what a fresh-clone test has to prove.
+_HARNESS_DIR = pathlib.Path(__file__).resolve().parent
+CERT = str(_HARNESS_DIR / "certs" / "cert.pem")
+KEY = str(_HARNESS_DIR / "certs" / "key.pem")
 
 
 def pump(src: socket.socket, dst: socket.socket) -> None:

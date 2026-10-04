@@ -12,7 +12,9 @@
 # The trace root is the monorepo, so the bundle nests under apps/web.
 set -euo pipefail
 
-WEB_DIR="${1:-/root/ForkReason/apps/web}"
+# Default to the checkout this script lives in, not a fixed path, so the
+# harness works from any clone.
+WEB_DIR="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/apps/web}"
 STANDALONE="$WEB_DIR/.next/standalone/apps/web"
 
 if [ ! -f "$STANDALONE/server.js" ]; then

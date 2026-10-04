@@ -13,7 +13,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const BASE = process.argv[2] ?? "http://127.0.0.1:3111";
-const OUT = process.argv[3] ?? "/root/ForkReason/artifacts/screens";
+// Resolve the output directory from this script's own location so the QA
+// harness works from any checkout.
+const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
+const OUT = process.argv[3] ?? path.join(REPO_ROOT, "artifacts", "screens");
 
 const VIEWPORTS = [
   { name: "desktop-1440", width: 1440, height: 900 },
