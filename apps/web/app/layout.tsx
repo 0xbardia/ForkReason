@@ -1,6 +1,13 @@
 import type { Metadata, Viewport } from "next";
 
-import "./styles/globals.css";
+// Self-hosted variable fonts. No external font request, which keeps the page
+// inside its own CSP origin and removes a third-party dependency.
+import "@fontsource-variable/instrument-sans";
+import "@fontsource-variable/jetbrains-mono";
+
+import "@/styles/globals.css";
+import "@/styles/components.css";
+import "@/styles/pages.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -41,6 +48,19 @@ export const metadata: Metadata = {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
   },
 };
+
+/**
+ * Font faces are registered as variables so tokens.css can reference them by
+ * name, keeping font choice out of every component.
+ */
+/**
+ * The nonce-based CSP requires a per-request render: Next reads the nonce out
+ * of the incoming `Content-Security-Policy` header and stamps it onto its
+ * inline bootstrap scripts. A statically prerendered page has no request, so
+ * Next emits those scripts without a nonce and the browser blocks them — the
+ * page renders nothing. This forces per-request rendering for the app shell.
+ */
+export const dynamic = "force-dynamic";
 
 export const viewport: Viewport = {
   themeColor: "#07110F",

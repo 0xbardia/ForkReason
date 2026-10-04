@@ -246,7 +246,7 @@ body::after {
 
 .display {
   font-size: var(--text-5xl);
-  line-height: var(--leading-tight);
+  line-height: var(--leading-display);
   letter-spacing: var(--tracking-tight);
   font-weight: var(--weight-bold);
   max-width: var(--measure-heading);

@@ -192,11 +192,20 @@ def fetch_repo_metadata(
         )
 
     default_branch = str(data.get("default_branch") or "main")[:160]
-    # `default_branch_commit` may be absent or explicitly null on some payloads.
+
+    # The repository payload does NOT include `default_branch_commit` — that
+    # field only appears on search and event payloads. Verified against the live
+    # API: /repos/{owner}/{repo} returns `default_branch` and nothing about its
+    # HEAD, so the commit must be resolved with a second request. A repository
+    # whose default branch is empty or unreadable surfaces as a clear error
+    # rather than an invented commit.
     branch_commit = data.get("default_branch_commit")
     commit_sha = ""
     if isinstance(branch_commit, dict):
         commit_sha = str(branch_commit.get("sha") or "")
+    if not commit_sha:
+        commit_sha = _resolve_default_branch_commit(ref, default_branch, cfg)
+
     if not commit_sha:
         raise GitHubUnavailableError(
             "no_default_branch_commit",
@@ -237,6 +246,22 @@ def fetch_repo_metadata(
 
     check_repo_size(metadata, IntakeLimits())
     return metadata
+
+
+def _resolve_default_branch_commit(
+    ref: RepoRef, default_branch: str, cfg: _ClientConfig
+) -> str:
+    """Resolve the immutable commit at a repository's default branch HEAD."""
+    response = _get(f"{api_repo_path(ref)}/commits/{default_branch}", cfg)
+    if response.status_code != 200:
+        return ""
+    try:
+        payload = response.json()
+    except ValueError:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    return str(payload.get("sha") or "")[:64]
 
 
 def recent_commits(ref: RepoRef, metadata: RepoMetadata, *, token: str | None = None, base_url: str | None = None) -> list[dict]:
