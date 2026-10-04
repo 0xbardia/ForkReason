@@ -156,9 +156,18 @@ module.exports = {
     },
     {
       name: "forkreason-web",
-      script: `${NODE_BIN}/npx`,
-      args: "next start -p 3100 -H 127.0.0.1",
-      interpreter: "none",
+      // Run the standalone server bundle directly, which is what Next requires
+      // under `output: "standalone"`. Two earlier shapes were wrong:
+      //   `npx next start`  - PM2 supervised the wrapper, so stopping it left
+      //     `next-server` alive holding :3100; the next restart died with
+      //     EADDRINUSE and the orphan served a stale build, which is why every
+      //     case route returned 404 while the API returned 200.
+      //   `node next/dist/bin/next start` - refused outright by Next under
+      //     standalone output ("does not work with output: standalone").
+      // The trace root is the monorepo, so the entrypoint lands under
+      // apps/web/ inside the bundle rather than at its root.
+      script: `${ROOT}/apps/web/.next/standalone/apps/web/server.js`,
+      interpreter: `${NODE_BIN}/node`,
       cwd: `${ROOT}/apps/web`,
       env: {
         ...common,
