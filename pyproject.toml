@@ -22,6 +22,28 @@ dev = [
     "httpx>=0.27",
 ]
 
+# Contract toolchain. `genlayer-test` does NOT pin `genlayer_py`, so a fresh
+# install otherwise resolves an older client that cannot fetch a contract schema
+# from a current GLSim node. Both are pinned here so a fresh clone is
+# reproducible rather than accidentally working.
+contract = [
+    # Pinned to the git tag, NOT the PyPI build.
+    #
+    # Both report version 0.29.2, but the PyPI wheel vendors an older glsim
+    # whose engine lacks `__type_desc__` handling. With it, contract deployment
+    # rolls back inside consensus with:
+    #   'ForkReasonRegistry' object has no attribute '__type_desc__'
+    # Studio Mode therefore only runs against the git source, which is what was
+    # certified. glsim has no independent distribution, so pinning the tag is
+    # the only way to make a fresh clone reproducible.
+    "genlayer-test[sim] @ git+https://github.com/genlayerlabs/genlayer-testing-suite@v0.29",
+    "genlayer-py==0.18.0",
+    # The GenLayer SDK imports numpy for u256 / fixed-point arithmetic but does
+    # not declare it, so a clean install fails at contract load time with
+    # "No module named 'numpy'". Declared here so a fresh clone works.
+    "numpy>=1.26",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

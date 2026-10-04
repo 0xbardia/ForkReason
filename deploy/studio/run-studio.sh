@@ -48,7 +48,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
-sleep 2
+echo "==> waiting for the model stub"
+for _ in $(seq 1 30); do
+  if curl -s --max-time 2 -o /dev/null -X POST "http://127.0.0.1:${STUB_PORT}/v1/chat/completions" \
+       -H 'Content-Type: application/json' \
+       -d '{"messages":[{"role":"user","content":"ready"}]}'; then
+    echo "    stub ready"
+    break
+  fi
+  sleep 1
+done
 
 echo "==> glsim (5 validators, max 3 rotations)"
 # Scoped to this process tree only.
@@ -74,7 +83,21 @@ export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-forkreason-local-stub-not-a-real-key
   --seed 42 &
 GLSIM_PID=$!
 
-sleep 6
+# Wait for actual readiness rather than sleeping a fixed interval. A cold
+# interpreter can take longer than 6s to load, and starting the suite early
+# produces schema errors that look like contract failures.
+echo "==> waiting for GLSim to accept requests"
+for _ in $(seq 1 60); do
+  if curl -s --max-time 2 -X POST http://127.0.0.1:4000/api \
+       -H 'Content-Type: application/json' \
+       -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
+       | grep -q result; then
+    echo "    GLSim ready"
+    break
+  fi
+  sleep 1
+done
+
 echo "==> Studio Mode suite"
 # gltest itself needs no proxy, but it inherits the env above harmlessly.
 .venv/bin/gltest contracts/tests/ -m integration -v -s
