@@ -66,12 +66,19 @@ class RepoRef:
 
 
 class InvalidRepositoryInput(ValueError):
-    """Rejected user input, with a reason safe to show a user."""
+    """Rejected user input, with a reason safe to show a user.
+
+    Registered with the API's error handler so a bad repository reference is a
+    400 with a readable reason, never a 500.
+    """
 
     def __init__(self, reason: str, code: str = "invalid_repository_input"):
         super().__init__(reason)
         self.reason = reason
         self.code = code
+
+    # Marks this as input validation for the API error handler.
+    is_input_validation = True
 
 
 def _fail(reason: str, code: str = "invalid_repository_input") -> None:
