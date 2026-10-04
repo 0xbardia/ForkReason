@@ -34,10 +34,13 @@ class Settings(BaseSettings):
     )
 
     # --- Database ------------------------------------------------------
-    database_url: str = Field(
-        default="postgresql+psycopg://forkreason:forkreason@127.0.0.1:5432/forkreason",
-        alias="DATABASE_URL",
-    )
+    # No hardcoded default. A baked-in DSN looks like configuration but
+    # silently substitutes a placeholder credential when DATABASE_URL is
+    # absent, which makes a misconfigured deployment fail at the first query
+    # with a confusing authentication error instead of naming the missing
+    # variable. An empty default keeps that error in validate_startup(), where
+    # it can be reported with the fix rather than as a pydantic field error.
+    database_url: str = Field(default="", alias="DATABASE_URL")
 
     # --- GitHub --------------------------------------------------------
     github_token: str | None = Field(default=None, alias="GITHUB_TOKEN")

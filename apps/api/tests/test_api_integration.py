@@ -21,9 +21,14 @@ TEST_DB_URL = os.environ.get(
     "TEST_DATABASE_URL", f"sqlite:///{ROOT / '_test_forkreason.db'}"
 )
 os.environ["DATABASE_URL"] = TEST_DB_URL
-os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault("SNAPSHOT_DIR", str(ROOT / "_test_snapshots"))
-os.environ.setdefault("GITHUB_TOKEN", "")
+# Assigned, not defaulted: the repository's own .env sets APP_ENV=production, so
+# setdefault() would leave the suite running as a production deployment.
+# create_app() validates configuration before serving, and a production start
+# with no GITHUB_TOKEN is correctly refused — which is exactly the fail-closed
+# behaviour the suite must not be subject to. No test makes a real GitHub call.
+os.environ["APP_ENV"] = "test"
+os.environ["SNAPSHOT_DIR"] = str(ROOT / "_test_snapshots")
+os.environ["GITHUB_TOKEN"] = "test-token-not-used-for-api-calls"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -753,3 +758,58 @@ def test_renamed_repository_snapshot_is_idempotent_under_a_different_id(tmp_path
     finally:
         session.rollback()
         session.close()
+
+
+# --- Configuration fail-closed -------------------------------------------
+
+
+def test_database_url_has_no_hardcoded_default() -> None:
+    """A missing DATABASE_URL must be visible, not silently substituted.
+
+    `database_url` used to carry a baked-in DSN with a placeholder password.
+    When the variable was absent, the application started cleanly and then
+    failed at the first query with a confusing authentication error, naming
+    neither the variable nor the fix. Config now starts empty so the failure is
+    reported by validate_startup().
+    """
+    from forkreason.config import Settings
+
+    bare = Settings(_env_file=None, DATABASE_URL="")
+    assert bare.database_url == "", "a default DSN is masking a missing variable"
+
+
+def test_missing_database_url_is_reported_actionably() -> None:
+    from forkreason.config import Settings
+
+    settings = Settings(_env_file=None, DATABASE_URL="", APP_ENV="test")
+    with pytest.raises(RuntimeError) as excinfo:
+        settings.validate_startup()
+    message = str(excinfo.value)
+    assert "DATABASE_URL" in message
+    # The message must tell the operator what to do, not merely what is wrong.
+    assert ".env.example" in message or "Copy" in message
+
+
+def test_production_requires_a_github_token() -> None:
+    """Without this the API inherits GitHub's 60/hour anonymous limit."""
+    from forkreason.config import Settings
+
+    settings = Settings(_env_file=None, APP_ENV="production", GITHUB_TOKEN=None)
+    with pytest.raises(RuntimeError) as excinfo:
+        settings.validate_startup()
+    assert "GITHUB_TOKEN" in str(excinfo.value)
+
+
+def test_startup_gate_actually_runs() -> None:
+    """validate_startup must be called during application creation.
+
+    The method existed and was correct, but nothing invoked it, so the whole
+    check was dead code: the API started happily with an invalid configuration
+    and failed later. This asserts the gate is wired, not merely present.
+    """
+    import inspect
+
+    from forkreason import main as main_module
+
+    source = inspect.getsource(main_module.create_app)
+    assert "validate_startup" in source, "create_app does not validate configuration"

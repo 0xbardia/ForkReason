@@ -30,6 +30,18 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
 
+    # Validate configuration before serving anything. Without this the checks in
+    # validate_startup() never ran, so a deployment missing DATABASE_URL or
+    # GITHUB_TOKEN started successfully and failed later with a confusing
+    # database authentication error or an unexplained rate limit. Failing here
+    # names the variable and states the fix.
+    try:
+        settings.validate_startup()
+    except RuntimeError as exc:
+        # Raise, do not log-and-continue: a misconfigured API must not accept
+        # traffic it cannot serve correctly.
+        raise RuntimeError(str(exc)) from exc
+
     app = FastAPI(
         title="ForkReason API",
         version="1.0.0",
