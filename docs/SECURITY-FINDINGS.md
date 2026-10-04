@@ -169,3 +169,30 @@ OpenAI. The proxy is process-scoped for exactly this reason.
 | No custodial signer | Code review; no `PRIVATE_KEY` in any request path |
 | PostgreSQL not public | `ss -ltn` shows `127.0.0.1:5432` |
 | No secrets committed | Pre-release secret scan |
+
+## Known dependency advisories
+
+`npm audit` reports **0 critical, 0 high, 22 moderate**. Every moderate advisory
+is the same transitive chain:
+
+```
+query-string  ->  @walletconnect/utils  ->  @walletconnect/core
+              ->  @reown/appkit-ui     ->  @rainbow-me/rainbowkit
+```
+
+`npm audit fix --force` would resolve them by moving RainbowKit past its
+supported range for `viem`/`@wagmi/core`, which npm's own resolver rejects as a
+peer conflict. ForkReason does not apply it.
+
+Why this is accepted rather than deferred:
+
+* The advisory is in `query-string`, reached only through the wallet
+  connector's internal URI handling. ForkReason never constructs a
+  `query-string` URL from repository or user input.
+* There is no critical or high advisory anywhere in the tree.
+* ForkReason's own security posture does not depend on this path: reads are
+  public and wallet-free, and every write is signed by the visitor's own wallet
+  against a contract that validates independently.
+
+Re-evaluate when RainbowKit ships a release without the advisory. Until then the
+count is stated here rather than hidden behind a green badge.

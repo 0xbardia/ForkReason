@@ -110,9 +110,12 @@ export function formatDate(iso: string | number | null | undefined): string {
 }
 
 export function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return "";
+  // Every other formatter in this module answers an absent value with an em
+  // dash. Returning an empty string here left callers rendering an empty
+  // element, which reads as a layout bug rather than as missing data.
+  if (!iso) return "—";
   const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "";
+  if (Number.isNaN(then)) return "—";
   const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
   if (seconds < 60) return "just now";
   const minutes = Math.floor(seconds / 60);
@@ -127,9 +130,15 @@ export function relativeTime(iso: string | null | undefined): string {
 /** Truncate without cutting mid-word where avoidable. */
 export function clamp(text: string, max: number): string {
   if (text.length <= max) return text;
-  const slice = text.slice(0, max);
+  // Cut on a code-point boundary, not a UTF-16 index. Slicing between the two
+  // halves of an emoji leaves a lone surrogate, which renders as a replacement
+  // character in the excerpt.
+  const characters = [...text];
+  if (characters.length > max) characters.length = max;
+  const slice = characters.join("");
   const lastSpace = slice.lastIndexOf(" ");
-  return `${(lastSpace > max * 0.6 ? slice.slice(0, lastSpace) : slice).trimEnd()}…`;
+  const body = (lastSpace > max * 0.6 ? slice.slice(0, lastSpace) : slice).trimEnd();
+  return `${body}…`;
 }
 
 /** Strip characters that have no business in a rendered excerpt. */

@@ -14,6 +14,7 @@ bugs this project has had were found by executing something, not by reading it.
 | Contract lint | `.venv/bin/genvm-lint contracts/forkreason_registry.py` | 3 checks passed |
 | Frontend typecheck | `cd apps/web && npm run typecheck` | clean |
 | Frontend lint | `cd apps/web && npm run lint` | clean |
+| Frontend unit tests | `cd apps/web && npm run test:unit` | **17 passed** |
 | Frontend build | `cd apps/web && npm run build` | 11 routes, standalone bundle verified |
 | Visual QA | `cd apps/web && node scripts/capture.mjs <baseUrl> <outDir> <caseId>` | 40 captures, 0 problems |
 

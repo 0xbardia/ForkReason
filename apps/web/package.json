@@ -8,8 +8,7 @@
     "start": "next start -p 3111",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --test --experimental-strip-types lib/*.test.ts",
-    "test:e2e": "playwright test",
+    "test:unit": "node --test --experimental-strip-types \"lib/**/*.test.ts\"",
     "check": "npm run typecheck && npm run lint",
     "build:next-only": "next build"
   },
