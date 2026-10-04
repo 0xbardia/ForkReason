@@ -26,14 +26,19 @@ CERT="$ROOT/deploy/studio/certs/cert.pem"
 # committed: a private key in the repository is a finding regardless of intent.
 CERT_DIR="$ROOT/deploy/studio/certs"
 mkdir -p "$CERT_DIR"
-if [ ! -f "$CERT_DIR/cert.pem" ] || [ ! -f "$CERT_DIR/key.pem" ]; then
-  echo "==> generating throwaway TLS cert for api.openai.com"
-  openssl req -x509 -newkey rsa:2048 -nodes \
-    -keyout "$CERT_DIR/key.pem" -out "$CERT_DIR/cert.pem" \
-    -days 30 -subj "/CN=api.openai.com" \
-    -addext "subjectAltName=DNS:api.openai.com" 2>/dev/null
-  chmod 600 "$CERT_DIR/key.pem"
-fi
+
+# Regenerated on EVERY run, not only when absent. An earlier version created it
+# once and reused it, which meant a key written to disk in one run stayed the
+# live interception key for every later run. It also means any copy of the key
+# that escapes has a 1-day certificate, so it cannot be paired with a
+# long-lived leaf to impersonate anything that trusts this host.
+echo "==> generating throwaway TLS cert for api.openai.com"
+rm -f "$CERT_DIR/cert.pem" "$CERT_DIR/key.pem"
+openssl req -x509 -newkey rsa:2048 -nodes \
+  -keyout "$CERT_DIR/key.pem" -out "$CERT_DIR/cert.pem" \
+  -days 1 -subj "/CN=api.openai.com" \
+  -addext "subjectAltName=DNS:api.openai.com" 2>/dev/null
+chmod 600 "$CERT_DIR/key.pem"
 
 echo "==> model stub on 127.0.0.1:${STUB_PORT}"
 .venv/bin/python deploy/studio/model_stub.py "$STUB_PORT" &

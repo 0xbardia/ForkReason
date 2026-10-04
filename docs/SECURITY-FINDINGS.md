@@ -147,6 +147,46 @@ absent and uses it only for the GLSim process via `REQUESTS_CA_BUNDLE`.
 machine-global and would break other services on the host that legitimately call
 OpenAI. The proxy is process-scoped for exactly this reason.
 
+### Historical: a test TLS private key was committed and pushed
+
+**Status: open, low severity, tracked as Accepted-Medium with a required fix.**
+
+Found during final V1 certification by scanning full git history rather than
+only the working tree. Commit `1149af9` ("contract: freeze V1 release
+candidate") added `deploy/studio/certs/key.pem` and `cert.pem`; commit `b8a5386`
+deleted them one commit later. Both had already been pushed to the public
+repository, so the blob remains retrievable from history.
+
+The certificate is `CN=api.openai.com`, self-signed, RSA-2048, generated
+2026-10-04. This is the Studio Mode interception certificate described above.
+
+**Why the practical impact is bounded**, verified rather than assumed:
+
+* The certificate is self-signed. It is therefore trusted only by a host
+  explicitly configured to trust *this* certificate.
+* It is in no system trust store. `/etc/ssl/certs/ca-certificates.crt` and the
+  OpenSSL default bundle do not contain it.
+* No `/etc/hosts` entry redirects `api.openai.com`; the redirect is scoped to
+  the GLSim process via `HTTPS_PROXY` and `REQUESTS_CA_BUNDLE`.
+* The key on disk today, which the running harness uses, is a **different**
+  key from the committed one.
+* It confers no OpenAI access. It is a TLS server key for a hostname, not a
+  credential of any service; it cannot authenticate to `api.openai.com`.
+
+**Required remediation.** The key must be purged from published history, not
+merely deleted going forward. `deploy/studio/certs/` is already in
+`.gitignore`, so the fix is a history rewrite plus a force-push of the affected
+refs. That is an irreversible operation on externally visible refs, so it is
+recorded here and scheduled rather than performed without explicit authorisation.
+
+**Interim compensating control.** The harness now **regenerates the certificate
+on every run** with a one-day validity, instead of reusing the first one it
+created. Any key leaked from disk therefore cannot be paired with a
+long-lived leaf certificate to impersonate anything, and the window in which a
+copied key is the live interception key is a single test run rather than
+permanent. This is a hardening of behaviour, not a substitute for the history
+purge above.
+
 ---
 
 ## Verified controls
