@@ -1,0 +1,222 @@
+/* ==========================================================================
+   ForkReason design tokens — "Vivid Liquid Forensics"
+
+   The product is a forensic instrument, so the visual language has to carry two
+   things at once: the precision of an evidence report, and the liveliness of a
+   living system. That is why the palette is saturated rather than neutral, and
+   why every accent is bound to a semantic role instead of applied decoratively.
+
+   Contents
+     1. Colour roles
+     2. Typography scale
+     3. Spacing, radius, elevation
+     4. Glass material system
+     5. Motion tokens and families
+     6. Focus system
+     7. Data-visualization tokens
+   ========================================================================== */
+
+:root {
+  /* --- 1. Colour ------------------------------------------------------- */
+
+  /* Base surfaces. Not pure black: the page is lit, not a void. */
+  --ink: #07110f;
+  --ink-deep: #040b0a;
+  --moss: #0b1815;
+  --moss-raised: #102420;
+  --paper: #f4fff9;
+
+  /* Glass. Two densities so hierarchy comes from material, not opacity alone. */
+  --glass: rgb(244 255 250 / 0.08);
+  --glass-high: rgb(244 255 250 / 0.12);
+  --glass-edge: rgb(244 255 250 / 0.16);
+  --glass-edge-bright: rgb(244 255 250 / 0.28);
+  --glass-shadow: rgb(0 0 0 / 0.44);
+
+  /* Text. Three steps, all AA on ink. */
+  --text-primary: #eaf7f1;
+  --text-secondary: #a8c3ba;
+  --text-muted: #94aaa3;
+  --text-faint: #6c837c;
+  --text-on-accent: #04100d;
+
+  /* Accents, each with a fixed semantic role. */
+  --mint: #12e6a7;          /* verified evidence, clean resolved state */
+  --aqua: #13cff4;          /* sources, repositories, data relationships */
+  --volt: #c8ff4a;          /* independent origin, healthy positive */
+  --amber: #ffc857;         /* uncertainty, pending, challenge */
+  --coral: #ff6655;         /* derivation conflict, high-attention */
+  --signal: #397bff;        /* GenLayer consensus, chain action */
+
+  --mint-dim: #0fa87a;
+  --aqua-dim: #0f9fbd;
+  --volt-dim: #9ccf2f;
+  --amber-dim: #cc9f42;
+  --coral-dim: #cc5044;
+  --signal-dim: #2b5fcc;
+
+  /* Living background fields. Layered, never a flat charcoal plane. */
+  --field-mint: radial-gradient(
+    62rem 42rem at 12% -8%,
+    rgb(18 230 167 / 0.16),
+    transparent 62%
+  );
+  --field-aqua: radial-gradient(
+    54rem 38rem at 88% 6%,
+    rgb(19 207 244 / 0.13),
+    transparent 60%
+  );
+  --field-volt: radial-gradient(
+    40rem 34rem at 62% 96%,
+    rgb(200 255 74 / 0.07),
+    transparent 64%
+  );
+  --field-signal: radial-gradient(
+    46rem 40rem at 4% 74%,
+    rgb(57 123 255 / 0.1),
+    transparent 62%
+  );
+
+  /* --- 2. Typography ---------------------------------------------------- */
+
+  --font-sans: var(--font-instrument), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono: var(--font-mono-face), ui-monospace, "SF Mono", "JetBrains Mono",
+    Menlo, Consolas, monospace;
+
+  /* Fluid scale. Clamps keep long headings readable at 320px without a media
+     query per step. */
+  --text-2xs: 0.6875rem;   /* 11px — eyebrows, stage labels */
+  --text-xs: 0.75rem;      /* 12px — metadata */
+  --text-sm: 0.8125rem;    /* 13px — secondary body */
+  --text-base: 0.9375rem;  /* 15px — body */
+  --text-lg: 1.0625rem;    /* 17px — lead */
+  --text-xl: clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);
+  --text-2xl: clamp(1.6rem, 1.3rem + 1.4vw, 2.1rem);
+  --text-3xl: clamp(2rem, 1.5rem + 2.4vw, 2.9rem);
+  --text-4xl: clamp(2.5rem, 1.7rem + 3.8vw, 4rem);
+  --text-5xl: clamp(3rem, 1.6rem + 6vw, 5.6rem);
+
+  --leading-tight: 1.04;
+  --leading-snug: 1.22;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.72;
+
+  /* Reading measure. Reports need a comfortable column; headings need room. */
+  --measure-prose: 68ch;
+  --measure-narrow: 46ch;
+  --measure-heading: 18ch;
+
+  --tracking-tight: -0.028em;
+  --tracking-snug: -0.014em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.08em;
+  --tracking-widest: 0.2em;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 680;
+
+  /* --- 3. Spacing, radius, elevation ------------------------------------ */
+
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.75rem;
+  --space-8: 3.75rem;
+  --space-9: 5rem;
+  --space-10: 7rem;
+  --space-11: 9.5rem;
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+
+  /* Elevation as layered glass, not drop shadows alone. */
+  --elev-1: 0 1px 2px rgb(0 0 0 / 0.24), 0 0 0 1px var(--glass-edge);
+  --elev-2: 0 4px 16px rgb(0 0 0 / 0.3), 0 0 0 1px var(--glass-edge),
+    inset 0 1px 0 var(--glass-edge-bright);
+  --elev-3: 0 12px 40px rgb(0 0 0 / 0.38), 0 0 0 1px var(--glass-edge),
+    inset 0 1px 0 var(--glass-edge-bright);
+  --elev-4: 0 24px 72px rgb(0 0 0 / 0.46), 0 0 0 1px var(--glass-edge),
+    inset 0 1px 0 var(--glass-edge-bright);
+
+  /* Optical edge highlight: the top-lit rim that makes glass read as a solid. */
+  --edge-specular: inset 0 1px 0 rgb(244 255 250 / 0.22),
+    inset 0 0 0 1px rgb(244 255 250 / 0.06);
+
+  /* --- 4. Glass material ------------------------------------------------ */
+
+  --blur-glass: 18px;
+  --blur-glass-high: 30px;
+  --blur-glass-low: 10px;
+
+  --refraction: 0.018;   /* refractive displacement used by the hero visual */
+  --liquid-tension: 0.6;  /* 0..1 pointer response strength */
+
+  /* --- 5. Motion -------------------------------------------------------- */
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-liquid: cubic-bezier(0.34, 1.32, 0.52, 1);
+  --ease-resolve: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --dur-instant: 90ms;
+  --dur-fast: 160ms;
+  --dur-base: 260ms;
+  --dur-slow: 420ms;
+  --dur-reveal: 720ms;
+
+  /* --- 6. Focus --------------------------------------------------------- */
+
+  --focus-ring: 0 0 0 2px var(--ink), 0 0 0 4px var(--mint);
+  --focus-ring-offset: 3px;
+
+  /* --- 7. Data visualization -------------------------------------------- */
+
+  --viz-mint: var(--mint);
+  --viz-aqua: var(--aqua);
+  --viz-volt: var(--volt);
+  --viz-amber: var(--amber);
+  --viz-coral: var(--coral);
+  --viz-signal: var(--signal);
+
+  --viz-grid-line: rgb(244 255 250 / 0.07);
+  --viz-axis-line: rgb(244 255 250 / 0.18);
+  --viz-edge-strong: rgb(19 207 244 / 0.85);
+  --viz-edge-weak: rgb(19 207 244 / 0.28);
+  --viz-edge-contradiction: rgb(255 102 85 / 0.7);
+
+  /* Verdict → colour mapping, used by badges, edges and timeline markers so a
+     verdict looks the same everywhere it appears. */
+  --verdict-likely-derived: var(--coral);
+  --verdict-heavily-derived: var(--amber);
+  --verdict-independent: var(--volt);
+  --verdict-shared-upstream: var(--aqua);
+  --verdict-declared-fork: var(--signal);
+  --verdict-insufficient: var(--muted, #94aaa3);
+
+  --layout-max: 78rem;
+  --layout-wide: 92rem;
+  --nav-height: 68px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    /* Durations collapse to near-zero rather than being removed, so transition
+       end-states still apply and nothing depends on an animation firing. */
+    --dur-instant: 1ms;
+    --dur-fast: 1ms;
+    --dur-base: 1ms;
+    --dur-slow: 1ms;
+    --dur-reveal: 1ms;
+  }
+}
