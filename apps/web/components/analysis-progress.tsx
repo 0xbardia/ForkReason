@@ -26,7 +26,10 @@ export function AnalysisProgress({ jobId }: { jobId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [preview, setPreview] = useState<EvidenceCard[]>([]);
-  const startedAt = useRef<number>(Date.now());
+  // Read inside the interval rather than during render: `Date.now()` in the
+  // render body is an impure read, and React may render a component more than
+  // once, which would restart the clock and make the elapsed time jump.
+  const startedAt = useRef<number | null>(null);
   const navigated = useRef(false);
 
   useEffect(() => {
@@ -87,7 +90,12 @@ export function AnalysisProgress({ jobId }: { jobId: string }) {
   }, [jobId, router, preview.length]);
 
   useEffect(() => {
-    const id = window.setInterval(() => setElapsed(Math.round((Date.now() - startedAt.current) / 1000)), 1000);
+    startedAt.current = Date.now();
+    const id = window.setInterval(() => {
+      const started = startedAt.current;
+      if (started === null) return;
+      setElapsed(Math.round((Date.now() - started) / 1000));
+    }, 1000);
     return () => window.clearInterval(id);
   }, []);
 

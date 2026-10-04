@@ -7,7 +7,6 @@ dependency (spec FR-I-011).
 
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 
 from pydantic import Field, field_validator

@@ -37,16 +37,10 @@ export function EvidenceGraph({
   nodes,
   edges,
   evidence,
-  originRepo,
-  targetRepo,
-  sharedUpstream,
 }: {
   nodes: GraphNode[];
   edges: GraphEdge[];
   evidence: EvidenceCard[];
-  originRepo: string;
-  targetRepo: string;
-  sharedUpstream: string | null;
 }) {
   const [focused, setFocused] = useState<string | null>(null);
 

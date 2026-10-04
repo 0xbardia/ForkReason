@@ -5,7 +5,7 @@ import { SiteNav } from "@/components/site-nav";
 import { SiteFooter } from "@/components/site-footer";
 import { DocsShell, DOC_GROUPS } from "@/components/docs-shell";
 import { DocContent } from "@/components/docs-content";
-import { DOC_PAGES, findDocPage } from "@/lib/docs-data";
+import { findDocPage } from "@/lib/docs-data";
 
 export const metadata: Metadata = {
   title: "Documentation",

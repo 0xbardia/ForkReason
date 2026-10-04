@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { RepoInput } from "@/components/repo-input";
 import { TracePanel } from "@/components/trace-panel";
 
 /**
@@ -19,8 +18,6 @@ import { TracePanel } from "@/components/trace-panel";
 export function Hero() {
   const [origin, setOrigin] = useState("");
   const [target, setTarget] = useState("");
-  const originRef = useRef<HTMLInputElement>(null);
-
   return (
     <section className="hero" aria-labelledby="hero-heading">
       <div className="hero-grid">

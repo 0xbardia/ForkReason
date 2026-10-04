@@ -17,9 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .config import get_settings
-from .db import ping
 from .errors import api_error_handler, http_exception_handler
-from .jobs import queue as q
 from .logging_setup import configure_logging
 
 log = logging.getLogger("forkreason.api")

@@ -73,12 +73,7 @@ export function TracePanel({
 
   // Debounced auto-validation once both fields are plausible.
   useEffect(() => {
-    if (!ready) {
-      setValidated(null);
-      setError(null);
-      setWarnings([]);
-      return;
-    }
+    if (!ready) return;
     if (timer.current !== null) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => void validate(origin, target), DEBOUNCE_MS);
     return () => {
@@ -112,6 +107,13 @@ export function TracePanel({
     }
   }
 
+  // Results are only trustworthy for the exact pair that produced them. Once
+  // either field is too short to validate, the last response describes a
+  // different comparison, so it is hidden rather than cleared by an effect.
+  const live = ready ? validated : null;
+  const liveError = ready ? error : null;
+  const liveWarnings = ready ? warnings : [];
+
   return (
     <div className="trace-panel" data-busy={starting}>
       <div className="trace-inputs">
@@ -120,8 +122,8 @@ export function TracePanel({
           role="origin"
           value={origin}
           onChange={onOrigin}
-          repository={(validated?.origin as RepositorySummary) ?? null}
-          error={error && !validated ? error : null}
+          repository={(live?.origin as RepositorySummary) ?? null}
+          error={liveError && !live ? liveError : null}
           checking={checking}
           disabled={starting}
         />
@@ -133,22 +135,22 @@ export function TracePanel({
           role="target"
           value={target}
           onChange={onTarget}
-          repository={(validated?.target as RepositorySummary) ?? null}
+          repository={(live?.target as RepositorySummary) ?? null}
           error={null}
           checking={checking}
           disabled={starting}
         />
       </div>
 
-      {error && validated ? (
+      {liveError && live ? (
         <p className="trace-error" role="alert">
-          {error}
+          {liveError}
         </p>
       ) : null}
 
-      {warnings.length > 0 ? (
+      {liveWarnings.length > 0 ? (
         <ul className="trace-warnings" role="status">
-          {warnings.map((warning) => (
+          {liveWarnings.map((warning) => (
             <li key={warning}>{warning}</li>
           ))}
         </ul>
@@ -167,7 +169,7 @@ export function TracePanel({
         <p id="trace-hint" className="trace-hint">
           {!ready
             ? "Enter two repositories to begin."
-            : validated
+            : live
               ? "Both repositories are public and will be pinned to their current commit."
               : "ForkReason pins an immutable commit for each repository before analyzing."}
         </p>

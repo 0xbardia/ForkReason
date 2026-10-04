@@ -30,10 +30,14 @@ export function SiteNav() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Close the mobile menu on navigation.
-  useEffect(() => {
+  // Close the mobile menu on navigation. Derived during render rather than
+  // reset from an effect: an effect here fires a second render pass on every
+  // route change, and the menu is only ever open because the user opened it.
+  const [menuPathname, setMenuPathname] = useState(pathname);
+  if (menuPathname !== pathname) {
+    setMenuPathname(pathname);
     setMenuOpen(false);
-  }, [pathname]);
+  }
 
   useEffect(() => {
     if (!menuOpen) return;

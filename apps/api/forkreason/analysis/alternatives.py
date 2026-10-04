@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .scoring import strength_for_score, weighted_case_score
 from ..domain import AlternativeExplanation, Confidence, Evidence, RepoProfile
-from .scoring import LAYER_WEIGHTS, strength_for_score, weighted_case_score
 
 # Sentinels and thresholds. These are calibration-free: they decide which
 # explanation wins, not how confident anyone is in a probability sense.

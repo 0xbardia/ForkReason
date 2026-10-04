@@ -319,9 +319,6 @@ export function CaseReportView({ caseId }: { caseId: string }) {
               nodes={graph.nodes}
               edges={graph.edges}
               evidence={report.evidence}
-              originRepo={meta.origin_repo}
-              targetRepo={meta.target_repo}
-              sharedUpstream={verdict.shared_upstream}
             />
           </div>
         </section>

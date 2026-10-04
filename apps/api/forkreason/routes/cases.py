@@ -482,15 +482,7 @@ def _sha256_hex(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-async def _read_json_body() -> dict:
-    """Small helper so this handler can validate its own body shape."""
-    from fastapi import Request
-
-    return {}
-
-
-from fastapi import Request  # noqa: E402  (imported late to avoid a cycle)
-
-
-def _read_body(request: Request) -> dict:
-    return {}
+# Challenge request bodies are declared as Pydantic models above
+# (ChallengePrepareRequest, ChallengeSubmittedRequest), so FastAPI parses and
+# validates them. Earlier revisions carried two hand-rolled body readers here
+# that each returned an empty dict and had no callers; both are gone.

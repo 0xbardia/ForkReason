@@ -28,9 +28,9 @@ import tarfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from .github_url import RepoRef
 from ..domain import CommitEntry, FileEntry, IntakeError, RepoProfile, UnsupportedRepositoryError
 from ..ids import snapshot_id_for
-from .github_url import RepoRef, api_repo_path
 
 log = logging.getLogger(__name__)
 

@@ -124,8 +124,6 @@ class ProfileStore:
         and guarantees we never analyze stale cached text.
         """
         from ..repos.snapshot import build_profile
-        from ..repos.github_url import validate_repo_input
-        from ..analysis.manifest import MANIFEST_CREATED_BY  # noqa: F401  (import check)
         from ..config import get_settings
 
         row = session.get(RepositorySnapshot, snapshot_id)
@@ -401,8 +399,6 @@ def _metadata_from_row(row: RepositorySnapshot):
 
 def row_commits(session: Session, snapshot_id: str) -> list:
     """Commits recorded for a snapshot, oldest first."""
-    from ..models import AnalysisJob  # noqa: F401
-
     row = session.get(RepositorySnapshot, snapshot_id)
     if row is None:
         return []

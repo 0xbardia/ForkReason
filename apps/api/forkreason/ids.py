@@ -18,7 +18,6 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
-import re
 from typing import Any
 
 _ID_SALT = "forkreason/v1"
@@ -207,10 +206,3 @@ def bounded_excerpt(text: str | None, limit: int) -> str | None:
     if len(text) <= limit:
         return text
     return text[:limit] + " …[truncated]"
-
-
-_SLUG_RE = re.compile(r"[^a-z0-9]+")
-
-
-def slugify(value: str) -> str:
-    return _SLUG_RE.sub("-", value.lower()).strip("-")

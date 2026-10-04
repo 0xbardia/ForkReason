@@ -75,23 +75,6 @@ def cap_by_commonality(score: float, *, common_only: bool) -> float:
     return min(score, COMMON_ONLY_CEILING)
 
 
-def combine(*scores: float, weights: Sequence[float] | None = None) -> float:
-    """Weighted mean of bounded scores, clamped to [0, 1]."""
-    vals = [s for s in scores if s is not None]
-    if not vals:
-        return 0.0
-    if weights is None:
-        weights = [1.0] * len(vals)
-    pairs = [(s, w) for s, w in zip(vals, weights) if w > 0]
-    if not pairs:
-        return 0.0
-    total_w = sum(w for _, w in pairs)
-    if total_w <= 0:
-        return 0.0
-    value = sum(s * w for s, w in pairs) / total_w
-    return max(0.0, min(1.0, value))
-
-
 def lift(base: float, evidence_weight: float, cap: float = 1.0) -> float:
     """Shift a similarity score by an evidence weight, staying in [0, cap].
 
@@ -126,7 +109,3 @@ def count_by_strength(evidence: Sequence[Evidence]) -> dict[str, int]:
     for item in evidence:
         counts[item.strength] = counts.get(item.strength, 0) + 1
     return counts
-
-
-def sort_strength(strengths: Iterable[str]) -> list[str]:
-    return sorted(strengths, key=lambda s: -STRENGTH_ORDER.get(s, 0))

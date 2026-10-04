@@ -12,7 +12,6 @@ import logging
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from .repos.github_url import InvalidRepositoryInput
 
 log = logging.getLogger(__name__)
 
@@ -50,9 +49,6 @@ def not_found(code: str, message: str) -> ApiError:
 def conflict(code: str, message: str) -> ApiError:
     return ApiError(409, code, message)
 
-
-def too_many(code: str, message: str) -> ApiError:
-    return ApiError(429, code, message)
 
 
 async def api_error_handler(_request: Request, exc: Exception) -> JSONResponse:

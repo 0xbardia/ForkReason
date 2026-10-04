@@ -141,7 +141,6 @@ def build_consensus_digest(manifest: dict[str, Any], max_chars: int = 12000) -> 
     evidence with short excerpts, and the competing explanations. Repository
     source is never included in full (constitution III.11, FR-H.003).
     """
-    decision = manifest["decision"]
     chronology = manifest["chronology"]
 
     lines: list[str] = []

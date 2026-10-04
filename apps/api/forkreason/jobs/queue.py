@@ -20,7 +20,7 @@ import logging
 from contextlib import contextmanager
 from typing import Iterator
 
-from sqlalchemy import select, text, update
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from ..domain import AnalysisCancelledError, AnalysisError, AnalysisTimeoutError

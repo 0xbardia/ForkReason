@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from typing import Sequence
 
+from .scoring import EvidenceBuilder, cap_by_commonality, lift
 from ..domain import Evidence, RepoProfile, strength_for_score
 from ..ids import bounded_excerpt, evidence_id
 from .fingerprint import (
@@ -28,7 +28,6 @@ from .fingerprint import (
     rarity,
     shingles,
 )
-from .scoring import EvidenceBuilder, cap_by_commonality, combine, lift
 
 # --- CODE DNA ------------------------------------------------------------
 
@@ -671,7 +670,6 @@ def bug_dna(
 
     # The pre-fix behaviour test, expressed on commit history.
     origin_fixes = _fix_commits(origin)
-    target_fixes = _fix_commits(target)
     if origin_fixes:
         latest_fix = max(ts for ts, _ in origin_fixes)
         target_first = _span(target)
@@ -977,5 +975,3 @@ def _iso(ts: int) -> str:
         "%Y-%m-%d"
     )
 
-
-from ..domain import FileEntry  # noqa: E402  (used in type hints above)

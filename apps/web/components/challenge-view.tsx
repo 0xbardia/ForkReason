@@ -27,7 +27,7 @@ const PHASE_COPY: Record<TxPhase, string> = {
  * could act for the user.
  */
 export function ChallengeView({ caseId }: { caseId: string }) {
-  const { address, isConnected, chainId } = useAccount();
+  const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
 
   const [rationale, setRationale] = useState("");

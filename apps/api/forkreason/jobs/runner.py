@@ -13,13 +13,11 @@ import os
 import signal
 import threading
 import time
-from pathlib import Path
 
 from ..analysis.pipeline import PipelineConfig, run_pipeline
 from ..config import get_settings
 from ..db import session_scope
 from ..domain import AnalysisCancelledError, AnalysisError
-from ..models import RepositorySnapshot
 from . import queue as q
 from .profile_store import ProfileStore
 
@@ -93,7 +91,6 @@ class AnalysisWorker:
                 with q.claim_job(session, WORKER_ID) as job:
                     if job is None:
                         return False
-                    job_id = job.id
                     check = q.cancel_checker(session, job)
                     self._process(session, job, check)
                     return True
@@ -108,7 +105,6 @@ class AnalysisWorker:
         job_id = job.id
         origin_snapshot_id = job.origin_snapshot_id
         target_snapshot_id = job.target_snapshot_id
-        case_id = job.case_id
 
         def report(stage: str, state: str) -> None:
             try:
@@ -176,8 +172,9 @@ class AnalysisWorker:
                 "analysis failed",
                 extra={"job_id": job_id, "code": code, "detail": exc.detail},
             )
-        except Exception as exc:  # noqa: BLE001
-            # Log the detail; show the user a bounded, non-leaking message.
+        except Exception:  # noqa: BLE001
+            # The traceback is logged; the user is shown a bounded,
+            # non-leaking message.
             log.exception("unexpected analysis error", extra={"job_id": job_id})
             q.finish_job(
                 session,

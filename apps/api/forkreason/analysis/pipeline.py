@@ -11,9 +11,10 @@ the manifest hash meaningful.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from typing import Any
 
 from ..domain import (
@@ -28,7 +29,6 @@ from ..models import PIPELINE_STAGES
 from .alternatives import ExplanationInputs, evaluate_explanations, select_verdict
 from ..domain import UpstreamCandidate
 from .chronology import (
-    UpstreamSignal,
     chronological_order,
     find_shared_upstream_candidates,
     repo_timeline,

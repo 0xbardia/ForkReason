@@ -53,10 +53,7 @@ export function TraceWorkspace() {
   }, []);
 
   useEffect(() => {
-    if (!ready) {
-      setValidated(null);
-      return;
-    }
+    if (!ready) return;
     if (timer.current !== null) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => void validate(origin, target), 500);
     return () => {
@@ -87,6 +84,12 @@ export function TraceWorkspace() {
     }
   }
 
+  // Results are only trustworthy for the exact pair that produced them. Once
+  // either field is too short to validate, the last response describes a
+  // different comparison, so it is hidden rather than cleared by an effect.
+  const live = ready ? validated : null;
+  const liveError = ready ? error : null;
+
   return (
     <div className="layout trace-page">
       <header className="trace-page-head">
@@ -107,8 +110,8 @@ export function TraceWorkspace() {
               role="origin"
               value={origin}
               onChange={setOrigin}
-              repository={validated?.origin ?? null}
-              error={error && !validated ? error : null}
+              repository={live?.origin ?? null}
+              error={liveError && !live ? liveError : null}
               checking={checking}
               disabled={starting}
             />
@@ -117,16 +120,16 @@ export function TraceWorkspace() {
               role="target"
               value={target}
               onChange={setTarget}
-              repository={validated?.target ?? null}
+              repository={live?.target ?? null}
               error={null}
               checking={checking}
               disabled={starting}
             />
           </div>
 
-          {error && validated ? (
+          {liveError && live ? (
             <p className="trace-error" role="alert">
-              {error}
+              {liveError}
             </p>
           ) : null}
 
@@ -140,7 +143,7 @@ export function TraceWorkspace() {
               {starting ? "Starting analysis…" : "Trace lineage"}
             </button>
             <p className="trace-hint">
-              {validated
+              {live
                 ? "Both repositories are public. Analysis usually takes under a minute."
                 : "Public GitHub repositories only, in V1."}
             </p>

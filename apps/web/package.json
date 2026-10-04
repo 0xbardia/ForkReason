@@ -7,10 +7,11 @@
     "build": "next build",
     "build:standalone": "next build && bash ../../deploy/web/assemble-standalone.sh",
     "start": "next start -p 3111",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:unit": "node --test --experimental-strip-types lib/*.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check": "npm run typecheck && npm run lint"
   },
   "dependencies": {
     "@fontsource-variable/instrument-sans": "^5.3.0",
@@ -25,14 +26,19 @@
     "wagmi": "2.19.5"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "4.1.14",
     "@types/node": "22.18.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
     "postcss": "8.5.23",
     "tailwindcss": "4.1.14",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.71.0"
   },
   "overrides": {
     "postcss": "8.5.23",

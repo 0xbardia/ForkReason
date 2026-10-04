@@ -7,10 +7,11 @@ from real pipeline state. No long analysis ever runs inside a request handler.
 
 from __future__ import annotations
 
+from fastapi import APIRouter, Depends, status
+
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -30,7 +31,6 @@ from ..repos.snapshot import (
     cache_profile_metadata,
     read_commits,
 )
-from ..models import RepositorySnapshot
 
 log = logging.getLogger(__name__)
 

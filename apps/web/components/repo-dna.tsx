@@ -119,21 +119,17 @@ export function RepoDna({
           </defs>
 
           {/* track rings */}
-          {LAYERS.map((layer, index) => {
-            const radius = maxRadius - index * ringGap;
-            const value = values?.[layer.key] ?? layer.value;
-            return (
-              <circle
-                key={layer.key}
-                cx={centre}
-                cy={centre}
-                r={radius}
-                fill="none"
-                stroke="var(--viz-grid-line)"
-                strokeWidth={ringGap * 0.62}
-              />
-            );
-          })}
+          {LAYERS.map((layer, index) => (
+            <circle
+              key={layer.key}
+              cx={centre}
+              cy={centre}
+              r={maxRadius - index * ringGap}
+              fill="none"
+              stroke="var(--viz-grid-line)"
+              strokeWidth={ringGap * 0.62}
+            />
+          ))}
 
           {/* scored arcs, drawn over their track */}
           {LAYERS.map((layer, index) => {
