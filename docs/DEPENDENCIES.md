@@ -1,102 +1,134 @@
 # Dependencies
 
-Every version here was chosen deliberately. Where the obvious choice is wrong,
-the reason is recorded.
+Versions are recorded with the reason they were chosen and what they were
+verified against. Executable probes outrank documentation: where the shipped
+SDK and `docs.genlayer.com` disagree, this project follows the SDK.
 
-## Frontend
+## Runtime
 
-| Package | Version | Why this version |
+| Component | Version | Verified |
 |---|---|---|
-| `next` | **15.5.27** | 15.5.4 is inside the RCE range `<15.5.7` (GHSA-9qr9-h5gf-34mp, CVSS 10). 15.5.27 is the patched 15.x line. Staying on 15 avoids the wagmi/RainbowKit churn in 16. |
-| `react` / `react-dom` | 19.3.0 | RainbowKit peer is `>=18`; React 19 is supported. |
-| `wagmi` | **2.19.5** | **Must be 2.x.** `@rainbow-me/rainbowkit@2.2.11` declares peer `wagmi ^2.9.0`; `npm i wagmi` resolves to 3.7.7, an unsatisfiable peer that breaks the build. |
-| `viem` | 2.57.2 | `genlayer-js` depends on `viem ^2.29.0`. |
-| `@rainbow-me/rainbowkit` | 2.2.11 | Current 2.x line. |
-| `@tanstack/react-query` | 5.104.1 | RainbowKit peer `>=5`; peer allows React 19. |
-| `genlayer-js` | **1.1.8** | The `latest` line. **Do not use `2.0.0-rc.1`**: it is a release candidate and its documented API (`waitForFinalization`, `isSuccessful`, `estimateTransactionFeesForWrite`, `waitUntil`) is absent from 1.1.8. See the API notes below. |
-| `typescript` | 5.9.3 | wagmi 3 needs `>=5.9.3`; 5.9.3 also satisfies wagmi 2. |
-| `@playwright/test` | 1.56.1 | Chromium + Firefox + WebKit. |
-
-### Transitive advisories resolved via `overrides`
-
-`npm audit` reports **0 critical, 0 high** after these. Each one otherwise
-required a breaking major upgrade that would break RainbowKit.
-
-| Package | Override | Advisory |
-|---|---|---|
-| `postcss` | `8.5.23` | `<8.5.23` (high); pulled in by Next |
-| `sharp` | `0.35.4` | `<0.35.4` (high) |
-| `ws` | `8.21.0` | `<8.21.0` (high); arrives via viem |
-
-Remaining `moderate` advisories are in WalletConnect/Reown SDK code reachable
-only through a WalletConnect project id, which is optional and unset by default.
-See `docs/SECURITY-FINDINGS.md`.
+| Python | 3.12.13 | Local runs, full test suite green |
+| PostgreSQL | 18 | Migrations applied, queue exercised |
+| Node.js | 22.23.3 (frontend), 20.20.2 (PM2) | Production build, `next start` |
+| nginx | system | TLS termination verified live |
+| PM2 | system (Node 20) | Three production processes supervised |
 
 ## Backend
 
-| Package | Version | Notes |
+Declared in `pyproject.toml` as lower bounds; these are the versions resolved
+in the release venv:
+
+| Package | Resolved |
+|---|---|
+| `fastapi` | 0.142.2 |
+| `uvicorn[standard]` | 0.54.0 |
+| `pydantic` | 2.13.5 |
+| `pydantic-settings` | 2.15.0 |
+| `sqlalchemy` | 2.1.3 |
+| `alembic` | 1.20.0 |
+| `psycopg[binary]` | 3.3.6 |
+| `requests` | 2.34.2 |
+| `python-dotenv` | 1.2.4 |
+| `pytest` (dev) | 9.1.1 |
+
+**No Redis.** The durable queue is PostgreSQL with `FOR UPDATE SKIP LOCKED`. The
+server already runs PostgreSQL; one fewer broker is one fewer failure mode.
+
+**No model SDK in the backend.** The forensic engine is deterministic Python.
+A model is consulted only inside GenLayer consensus, where the Equivalence
+Principle governs it. Keeping the decision logic out of the backend is what makes
+verdicts reproducible.
+
+## Contract
+
+Resolved in the release venv:
+
+| Distribution | Version | Notes |
 |---|---|---|
-| Python | 3.12.13 | Contract SDK requires 3.12+. |
-| `fastapi` | ≥0.115 | |
-| `uvicorn[standard]` | ≥0.32 | Serves the API. |
-| `pydantic` | ≥2.9 | |
-| `pydantic-settings` | ≥2.6 | Env loading with alias support. |
-| `sqlalchemy` | 2.1.3 | |
-| `alembic` | ≥1.14 | |
-| `psycopg[binary]` | 3.3.6 | PostgreSQL driver. |
-| `pytest` | 9.1.1 | |
+| `genlayer-test` | 0.29.2 | Direct Mode and Studio Mode |
+| `genvm-linter` | 0.11.1-rc.2 | 3 checks |
+| `glsim` | from `genlayer-test[sim]` | GLSim simulator, no Docker |
 
-## GenLayer contract SDK
-
-Verified empirically, not from prose. Full detail in
-`docs/GENLAYER-SDK-VERIFIED.md`.
-
-| Package | Version | Source |
-|---|---|---|
-| `genlayer-py` | v0.18 | `git+https://github.com/genlayerlabs/genlayer-py@v0.18` |
-| `genlayer-test` | 0.29.2 | `git+https://github.com/genlayerlabs/genlayer-testing-suite@v0.29` |
-| `genvm-linter` | 0.11.1rc2 | `git+https://github.com/genlayerlabs/genvm-linter@main` |
-| `genlayer` (CLI) | 0.40.0-rc.3 | `npm install -g genlayer` |
-
-**The PyPI package named `genlayer` is a 0.0.1 placeholder with no entry points.**
-It is not the SDK. The real distributions come from the `genlayerlabs` git URLs
-above, which is what the official project boilerplate pins.
-
-### Contract dependency header
-
-```python
-# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+```bash
+uv pip install --python .venv/bin/python 'genlayer-test[sim]'
 ```
 
-This is a runtime pin resolved by the VM, not documentation. It must not be
-removed.
+The GenLayer Python SDK is used from source. Verified by executable probe inside
+the Direct Mode VM:
 
-## GenLayerJS API notes (the traps)
-
-Verified against the published 1.1.8 tarball.
-
-- **Chain exports** come from `genlayer-js/chains`: `localnet` (61127),
-  `studionet` (61999), `testnetAsimov` (4221), `testnetBradbury` (4221).
-  Asimov and Bradbury share a chain id, so only one can be active at a time.
-- **RPC override** is the `endpoint` client option, not a mutated chain.
-- `writeContract` in 1.1.8 requires `value: bigint` and returns the **GenLayer
-  transaction id**, not the EVM hash.
-- `waitForTransactionReceipt` defaults to `status: "ACCEPTED"`, `interval:
-  3000ms`, `retries: 10` (~30s ceiling).
-- **A decided transaction is not a successful one.** `ACCEPTED` means the
-  committee agreed on the receipt. `ExecutionResult.FINISHED_WITH_RETURN` must
-  also be checked.
-- Wallet binding is viem-style: `createClient({ chain, account: address,
-  provider })`. There is no `signerAddress` field.
-- `readContract` uses `transactionHashVariant`, not the `stateStatus` option the
-  docs show.
-
-## Tooling
-
-| Tool | Version |
+| Symbol | Status |
 |---|---|
-| `uv` | 0.12.19 |
-| Node.js | 22.23.3 |
-| PostgreSQL | 18.6 |
-| nginx | 1.28.3 |
-| PM2 | 0.11.22 (Node 20 runtime) |
+| `gl.Contract` | **Verified** — compiles and runs in the real VM |
+| `gl.vm.run_nondet` | **Verified** — the sandboxed leader+validator path used here |
+| `gl.vm.UserError` | **Verified** |
+| `gl.vm.unpack_result` | **Verified** |
+| `gl.public.view` / `gl.public.write` | **Verified** |
+| `TreeMap` storage | **Verified** |
+| `@allow_storage` | **Does not exist** in the shipped surface |
+| `run_nondet_default` | **Not present** in the installed SDK |
+| `gl.contract.Contract` | Not required; `gl.Contract` works |
+
+### Why this section exists
+
+Secondary reference material was produced during this build that stated
+`run_nondet` was unsafe, that `run_nondet_default` existed, and that
+`gl.contract.Contract` must replace `gl.Contract`. Every one of those claims
+contradicts an executed probe against the shipping SDK, and none could be
+reproduced here.
+
+**Policy:** executable probes outrank unexecuted documentation. A secondary
+reference that disagrees with the shipping SDK is not adopted. Those files were
+deleted rather than shipped.
+
+Documented facts that *are* corroborated: `docs.genlayer.com` may diverge from
+the shipping SDK; `@allow_storage` does not exist; `UserError.message` is not
+the accessor (`UserError.data` is).
+
+### Studio Mode model endpoint
+
+Studio Mode certification runs against a local OpenAI-compatible stub
+(`deploy/studio/model_stub.py`) reached through a process-scoped CONNECT proxy
+(`deploy/studio/tls_proxy.py`). GLSim hardcodes `api.openai.com` and offers no
+base-URL override; an `/etc/hosts` redirect was rejected because it is
+machine-global and breaks other services on this host.
+
+The stub implements the contract's exact schema and supports adversarial modes.
+It certifies consensus mechanics, not hosted-model output quality — see
+`contracts/RELEASE_CANDIDATE.md`.
+
+## Frontend
+
+Exact versions in `apps/web/package.json`:
+
+| Package | Version | Reason |
+|---|---|---|
+| `next` | 15.5.27 | App Router, per-request CSP nonce support |
+| `react` / `react-dom` | 19.3.0 | Current stable |
+| `@rainbow-me/rainbowkit` | 2.2.11 | Wallet UX |
+| `wagmi` | **2.19.5** | RainbowKit 2.2.11 peers `wagmi ^2.9.0`; `wagmi@latest` is 3.x and breaks it |
+| `viem` | 2.57.2 | Wallet transport |
+| `genlayer-js` | 1.1.8 | Chain reads and transaction lifecycle |
+| `@tanstack/react-query` | 5.104.1 | Server-state caching |
+| `@fontsource-variable/instrument-sans` | 5.3.0 | Self-hosted UI type |
+| `@fontsource-variable/jetbrains-mono` | 5.3.0 | Self-hosted mono for commits/hashes |
+| `@playwright/test` | 1.63 | Browser QA |
+| `typescript` | 5.9.3 | Typecheck |
+
+**Pinning `wagmi` to 2.x is load-bearing.** `npm i wagmi` installs 3.x, which is
+outside RainbowKit 2.2.11's peer range.
+
+**`genlayer-js`** is used for chain reads and transaction lifecycle. Verified
+traps: `genlayer-js@latest` (1.1.8) does **not** have `waitForFinalization`,
+`isSuccessful` or `estimateTransactionFeesForWrite` — those live in the `rc` tag.
+The repo does not depend on those APIs.
+
+**GenLayer is not in viem's chain registry**, so the network is defined
+explicitly.
+
+First-load JS is ~360 kB, dominated by the wallet SDK. Documentation routes
+avoid the wallet bundle where practical.
+
+## Security posture
+
+`npm audit`: 0 critical, 0 high at release.

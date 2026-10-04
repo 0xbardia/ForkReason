@@ -46,3 +46,4 @@ screenshots/
 test-results/
 venv/
 logs/
+deploy/studio/certs/

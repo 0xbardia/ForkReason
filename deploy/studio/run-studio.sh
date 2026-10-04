@@ -22,6 +22,19 @@ STUB_PORT="${STUB_PORT:-8089}"
 PROXY_PORT="${PROXY_PORT:-8443}"
 CERT="$ROOT/deploy/studio/certs/cert.pem"
 
+# A throwaway self-signed cert for api.openai.com, generated here rather than
+# committed: a private key in the repository is a finding regardless of intent.
+CERT_DIR="$ROOT/deploy/studio/certs"
+mkdir -p "$CERT_DIR"
+if [ ! -f "$CERT_DIR/cert.pem" ] || [ ! -f "$CERT_DIR/key.pem" ]; then
+  echo "==> generating throwaway TLS cert for api.openai.com"
+  openssl req -x509 -newkey rsa:2048 -nodes \
+    -keyout "$CERT_DIR/key.pem" -out "$CERT_DIR/cert.pem" \
+    -days 30 -subj "/CN=api.openai.com" \
+    -addext "subjectAltName=DNS:api.openai.com" 2>/dev/null
+  chmod 600 "$CERT_DIR/key.pem"
+fi
+
 echo "==> model stub on 127.0.0.1:${STUB_PORT}"
 .venv/bin/python deploy/studio/model_stub.py "$STUB_PORT" &
 STUB_PID=$!
