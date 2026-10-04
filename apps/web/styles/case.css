@@ -195,10 +195,45 @@
   padding-block: var(--space-7) var(--space-8);
 }
 
+/* The verdict is the answer to the question the visitor came with. It gets a
+   colour field keyed to the verdict itself, so the page opens on a decision
+   rather than on a wall of dark rectangles. */
 .case-headline {
-  padding-bottom: var(--space-6);
-  border-bottom: 1px solid var(--glass-edge);
+  position: relative;
   margin-bottom: var(--space-7);
+  padding: var(--space-6) var(--space-5);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  background: linear-gradient(
+    158deg,
+    color-mix(in oklab, var(--verdict-hue) 15%, transparent) 0%,
+    transparent 58%
+  );
+  border: 1px solid color-mix(in oklab, var(--verdict-hue) 24%, transparent);
+  box-shadow: inset 0 1px 0 rgb(244 255 250 / 0.08);
+}
+
+.case-headline::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    70% 120% at 88% -10%,
+    color-mix(in oklab, var(--verdict-hue) 22%, transparent) 0%,
+    transparent 62%
+  );
+}
+
+.case-headline > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (min-width: 760px) {
+  .case-headline {
+    padding: var(--space-7);
+  }
 }
 
 .case-verdict {
@@ -206,15 +241,18 @@
 }
 
 .case-verdict-badge {
+  display: block;
   font-family: var(--font-sans);
-  font-size: var(--text-4xl);
+  font-size: clamp(2.6rem, 7.2vw, 4.35rem);
   font-weight: var(--weight-bold);
-  letter-spacing: var(--tracking-tight);
-  line-height: 1;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
   text-transform: none;
   border: 0;
   background: none;
   padding: 0;
+  /* The verdict text itself is the largest element on the page. */
+  text-shadow: 0 0 46px color-mix(in oklab, currentColor 34%, transparent);
 }
 
 .case-verdict-badge.badge-coral { color: var(--coral); }

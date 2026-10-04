@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { EvidenceGraph, buildGraph } from "@/components/evidence-graph";
 import { RepoDna } from "@/components/repo-dna";
@@ -26,6 +26,21 @@ const LAYER_ORDER = ["CODE", "ARCHITECTURE", "HISTORY", "BUG", "TEST", "LANGUAGE
  * normal reader gets the answer immediately and an engineer can drill into
  * exact files, commits and the manifest hash.
  */
+/**
+ * The colour a verdict paints its own section with. This is semantic, not
+ * decorative: coral for a derivation conflict, amber for uncertainty, mint for
+ * a clean independent result, so the page's mood is legible before a word is
+ * read.
+ */
+const VERDICT_HUE: Record<Verdict, string> = {
+  LIKELY_DERIVED: "var(--coral)",
+  HEAVILY_DERIVED: "var(--amber)",
+  INDEPENDENT: "var(--mint)",
+  SHARED_UPSTREAM: "var(--aqua)",
+  DECLARED_FORK: "var(--volt)",
+  INSUFFICIENT_EVIDENCE: "var(--text-faint)",
+};
+
 export function CaseReportView({ caseId }: { caseId: string }) {
   const [report, setReport] = useState<CaseReport | null>(null);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
@@ -114,7 +129,10 @@ export function CaseReportView({ caseId }: { caseId: string }) {
   }
 
   return (
-    <div className="layout case-page">
+    <div
+      className="layout case-page"
+      style={{ "--verdict-hue": VERDICT_HUE[verdict.verdict] ?? "var(--aqua)" } as CSSProperties}
+    >
       {/* --- 1. The answer ------------------------------------------- */}
       <section className="case-headline" aria-labelledby="verdict-heading">
         <p className="eyebrow">Case report · revision {meta.current_revision}</p>

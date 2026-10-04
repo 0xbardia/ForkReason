@@ -22,11 +22,23 @@ const VIEWPORTS = [
   { name: "mobile-360", width: 360, height: 800 },
 ];
 
+// A real case, so the signature screen is reviewed against real data rather
+// than an empty state. Override with CASE_ID.
+const CASE_ID = process.env.CASE_ID ?? "";
+
 const SURFACES = [
   { name: "landing", path: "/" },
   { name: "trace", path: "/trace" },
+  ...(CASE_ID
+    ? [
+        { name: "case", path: `/case/${CASE_ID}` },
+        { name: "evidence", path: `/case/${CASE_ID}/evidence` },
+        { name: "challenge", path: `/case/${CASE_ID}/challenge` },
+      ]
+    : []),
   { name: "explore", path: "/explore" },
   { name: "docs", path: "/docs" },
+  { name: "docs-detail", path: "/docs/repo-dna" },
   { name: "security", path: "/security" },
   { name: "notfound", path: "/this-route-does-not-exist" },
 ];

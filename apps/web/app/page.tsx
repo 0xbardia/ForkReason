@@ -10,6 +10,7 @@ import {
   ProductProof,
   WhyGenLayer,
 } from "@/components/landing-sections";
+import { LineageTimeline } from "@/components/lineage-timeline-demo";
 import { SiteFooter } from "@/components/site-footer";
 
 export default function LandingPage() {
@@ -21,6 +22,7 @@ export default function LandingPage() {
         <ProductProof />
         <HowItThinks />
         <DnaSection />
+        <LineageTimeline />
         <WhyGenLayer />
         <ChallengeSection />
         <OpenSourceSection />

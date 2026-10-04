@@ -10,6 +10,7 @@ import "@/styles/components.css";
 import "@/styles/pages.css";
 import "@/styles/case.css";
 import "@/styles/docs.css";
+import "@/styles/timeline.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(

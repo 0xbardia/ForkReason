@@ -59,7 +59,7 @@ export const DOC_PAGES: DocPage[] = [
         "Not a similarity search with a threshold. Matching code is the beginning of the question, not the answer.",
         "Not a legal instrument. It reports development relationships; it makes no legal determination.",
       ),
-      badge("A boring, defensible result is a success."),
+      badge("A boring result is still a success.", "mint"),
       h3("The core idea"),
       p(
         "Similarity is not lineage. Two files match for many uninteresting reasons: a shared framework, an implemented specification, a common upstream, or an unfashionable week in 2014. ForkReason only claims a lineage when chronology and historical evidence agree, and it always shows the evidence that argues the other way.",
