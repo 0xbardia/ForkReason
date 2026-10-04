@@ -29,7 +29,7 @@ You need a PostgreSQL instance for the backend and integration tests.
 ## Before you open a pull request
 
 ```bash
-# Backend — 205 tests
+# Backend — 219 tests
 PYTHONPATH=apps/api .venv/bin/python -m pytest apps/api/tests/ -q
 
 # Contract, Direct Mode — 51 tests, no network needed
@@ -81,7 +81,7 @@ State the expected verdict **and** why. If the honest answer is
 ## Changing evidence scoring
 
 1. Change the smallest thing that could work.
-2. Run the full backend suite; all 205 tests must pass.
+2. Run the full backend suite; all 219 tests must pass.
 3. Add a fixture that fails without your change.
 4. Explain in the PR what false positive or false negative you removed.
 

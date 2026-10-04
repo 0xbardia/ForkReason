@@ -46,7 +46,7 @@ DATABASE_URL=postgresql+psycopg://... .venv/bin/python -m alembic upgrade head
 
 ## Test counts (verified by real runs)
 
-- Backend: **205 passing**
+- Backend: **219 passing**
 - Contract Direct Mode: **51 passing** (37 registry + 14 injection)
 - `genvm-lint`: clean, 3 checks
 

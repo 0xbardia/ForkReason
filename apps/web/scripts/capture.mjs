@@ -127,6 +127,31 @@ for (const viewport of VIEWPORTS) {
 await browser.close();
 await writeFile(path.join(OUT, "findings.json"), JSON.stringify(findings, null, 2));
 
-const problems = findings.filter((f) => f.errors.length > 0 || f.overflow > 0 || f.status >= 500);
+// The 404 surface is *supposed* to return 404, and the browser logs its own
+// document request as a failed resource. Counting that as a problem made a
+// clean run report four failures, which trains a reader to ignore this output.
+// A capture is a problem only if it deviates from what that surface promises.
+const EXPECTED_STATUS = new Map([["notfound", 404]]);
+
+const problems = findings.filter((f) => {
+  const expected = EXPECTED_STATUS.get(f.surface);
+  const statusOk = expected === undefined ? f.status < 400 : f.status === expected;
+  // A console error that only restates the expected status is not a defect.
+  const realErrors = f.errors.filter((e) => {
+    if (!statusOk) return true;
+    return !e.includes(String(expected));
+  });
+  return realErrors.length > 0 || f.overflow > 0 || !statusOk || f.status >= 500;
+});
+
 console.log(`\n${findings.length} captures, ${problems.length} with problems.`);
+if (problems.length > 0) {
+  for (const p of problems) {
+    console.log(
+      `  ${p.surface}/${p.viewport}: status=${p.status} overflow=${p.overflow}`,
+    );
+  }
+  // Fail loudly: this script is a release gate, not a report.
+  process.exitCode = 1;
+}
 console.log(`Output: ${OUT}`);

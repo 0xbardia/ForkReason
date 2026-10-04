@@ -4,14 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3111",
-    "build": "next build",
-    "build:standalone": "next build && bash ../../deploy/web/assemble-standalone.sh",
+    "build": "bash ../../deploy/web/build-production.sh",
     "start": "next start -p 3111",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:unit": "node --test --experimental-strip-types lib/*.test.ts",
     "test:e2e": "playwright test",
-    "check": "npm run typecheck && npm run lint"
+    "check": "npm run typecheck && npm run lint",
+    "build:next-only": "next build"
   },
   "dependencies": {
     "@fontsource-variable/instrument-sans": "^5.3.0",

@@ -70,11 +70,11 @@ GenLayer consensus.
 
 | Suite | Result |
 |---|---|
-| Backend (`pytest`) | 205 passed |
+| Backend (`pytest`) | 219 passed |
 | Contract, Direct Mode (`gltest`) | 51 passed |
 | Contract, Studio Mode (GLSim, 5 validators) | 8 passed |
 | `genvm-lint` | 3 checks passed |
-| Visual QA | 40 captures, 0 overflow, 0 5xx |
+| Visual QA | 40 captures, 0 problems |
 | `npm audit` | 0 critical, 0 high |
 
 ### Security posture
