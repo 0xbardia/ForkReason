@@ -53,14 +53,80 @@ def _coerce(value: Any) -> Any:
 
 
 def canonical_json(value: Any) -> str:
-    """Serialize to canonical JSON: sorted keys, no insignificant whitespace."""
+    """Serialize to canonical JSON: sorted keys, no insignificant whitespace.
+
+    Canonicalization is what makes the manifest hash meaningful, so it must be
+    total: the same logical content always serializes identically, regardless of
+    the order in which collections were assembled. List order therefore has to
+    be normalized too — for manifest-bearing payloads, lists are *sets of
+    findings* whose order is an artifact of analysis, not meaning.
+    """
     return json.dumps(
-        _coerce(value),
+        _coerce_canonical(value),
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=True,
         allow_nan=False,
     )
+
+
+# Keys whose values are ordered sets of findings rather than meaningful
+# sequences. Sorting these makes the hash independent of collection order.
+_CANONICAL_SORTED_LISTS = frozenset(
+    {
+        "evidence",
+        "conflicting_evidence",
+        "alternative_explanations",
+        "common_upstream_candidates",
+        "evidence_classes",
+        "evidence_refs",
+        "reasons",
+        "layers",
+        "candidates",
+    }
+)
+
+
+def _coerce_canonical(value: Any) -> Any:
+    """Like `_coerce`, but sorts the collections whose order carries no meaning."""
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        rounded = round(value, 6)
+        return 0.0 if rounded == 0 else rounded
+    if isinstance(value, dt.datetime):
+        return value.astimezone(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+    if isinstance(value, dt.date):
+        return value.isoformat()
+    if isinstance(value, (set, frozenset)):
+        return sorted(_coerce_canonical(v) for v in value)
+    if isinstance(value, (list, tuple)):
+        items = [_coerce_canonical(v) for v in value]
+        return _sort_by_key(items)
+    if isinstance(value, dict):
+        out = {}
+        for key, item in sorted(value.items(), key=lambda kv: str(kv[0])):
+            canonical = _coerce_canonical(item)
+            if key in _CANONICAL_SORTED_LISTS and isinstance(canonical, list):
+                canonical = _sort_by_key(canonical)
+            out[str(key)] = canonical
+        return out
+    if hasattr(value, "to_dict"):
+        return _coerce_canonical(value.to_dict())
+    if hasattr(value, "__dataclass_fields__"):
+        import dataclasses
+
+        return _coerce_canonical(dataclasses.asdict(value))
+    return str(value)
+
+
+def _sort_by_key(items: list[Any]) -> list[Any]:
+    """Deterministic order for a collection of findings.
+
+    Sorted by canonical JSON so any mix of dicts and scalars is orderable and
+    stable across runs and Python versions.
+    """
+    return sorted(items, key=lambda x: json.dumps(x, sort_keys=True, ensure_ascii=True))
 
 
 def content_hash(value: Any) -> str:
