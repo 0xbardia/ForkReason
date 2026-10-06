@@ -58,10 +58,10 @@ def evaluate_explanations(inp: ExplanationInputs) -> list[AlternativeExplanation
     # Requires BOTH a compatible timeline AND substantive, multi-layer evidence.
     # Chronology alone is never enough: any two unrelated projects have a
     # compatible timeline, and "the second one started later" is not a finding.
-    chronology_supports = inp.chronology in {
-        "TARGET_AFTER_ORIGIN_MATURED",
-        "OVERLAPPING",
-    }
+    chronology_supports = inp.chronology in {"TARGET_AFTER_ORIGIN_MATURED", "OVERLAPPING"} or (
+        inp.chronology == "ORIGIN_PREDATES_TARGET"
+        and _has(evidence, "HISTORY", "target_created_after_origin_matured")
+    )
     bug_support = _score_layer(evidence, "BUG")
     history_support = _score_layer(evidence, "HISTORY")
     code_support = _score_layer(evidence, "CODE")
@@ -268,18 +268,29 @@ def evaluate_explanations(inp: ExplanationInputs) -> list[AlternativeExplanation
                     item, "score", max(0.0, item.score - penalty)
                 )
 
+    # Divergence presupposes a supported directional derivation. Similarity
+    # cannot stand in for that missing evidence, including after counter-
+    # evidence has reduced the derivation score.
+    derived = next((item for item in out if item.kind == "TARGET_DERIVED_FROM_ORIGIN"), None)
+    divergence = next((item for item in out if item.kind == "POST_DERIVATION_DIVERGENCE"), None)
+    if derived is None or divergence is None or derived.score < DERIVATION_FLOOR:
+        if divergence is not None:
+            object.__setattr__(divergence, "score", 0.0)
+
     out.sort(key=lambda a: (-a.score, a.kind))
     return out
 
 
 def _derivation_rationale(inp: ExplanationInputs, layers: set[str]) -> str:
     bits = []
-    if inp.chronology == "TARGET_AFTER_ORIGIN_MATURED":
+    if inp.chronology == "TARGET_AFTER_ORIGIN_MATURED" or _has(
+        inp.evidence, "HISTORY", "target_created_after_origin_matured"
+    ):
         bits.append("the target began after the origin matured")
     elif inp.chronology == "OVERLAPPING":
         bits.append("the two histories overlap in time")
     else:
-        bits.append("the commit timeline does not support derivation")
+        bits.append("the available timeline does not establish derivation")
     if "BUG" in layers:
         bits.append("shared historical defect signatures")
     if "HISTORY" in layers:

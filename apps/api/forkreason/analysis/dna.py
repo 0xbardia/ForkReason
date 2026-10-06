@@ -281,10 +281,33 @@ def _is_uncommon_constant(value: str) -> bool:
     if stripped.upper() in _ECOSYSTEM_VOCABULARY:
         return False
 
+    # Whole classes of literal that every implementation of the same protocol
+    # or runtime writes, whichever project it belongs to.
+    if _MIME_TYPE_RE.fullmatch(stripped) and not _VENDOR_MIME_RE.search(stripped):
+        return False
+    if _EXAMPLE_URL_RE.fullmatch(stripped):
+        return False
+    # `<local>`, `<string>`, `<stdin>`: interpreter pseudo-names, not values.
+    if _PSEUDO_NAME_RE.fullmatch(stripped):
+        return False
+    # `/get`, `/status`: a one-segment route is an endpoint name; web projects
+    # all test against the same handful.
+    if _BARE_ROUTE_RE.fullmatch(stripped):
+        return False
+    # `0123456789`, `abcdefghijklmnopqrstuvwxyz`: a character-set alphabet is
+    # defined by the alphabet, not by any author.
+    if _is_alphabet_run(stripped):
+        return False
+
     # A bare identifier (`base_url`, `host`) is framework vocabulary, not a
     # magic constant. Require either a non-word character (0x5F3759DF,
     # %s:%d, --flag) or a name that is uncommon by the shared rarity baseline.
     if stripped.replace("_", "").isalnum() and stripped.islower():
+        # A single short word (`auth`, `domain`, `charset`) is an English or
+        # protocol word that any two projects in a domain both write. Only a
+        # compound or long identifier can be distinctive.
+        if "_" not in stripped and len(stripped) < 12:
+            return False
         return not is_common(stripped)
 
     return True
@@ -357,6 +380,8 @@ _PLACEHOLDER_CONSTANTS = frozenset(
         "bar",
         "baz",
         "foobar",
+        "blah",
+        "foo=bar",
         "lorem ipsum",
         "test",
         "example",
@@ -381,6 +406,32 @@ _PLACEHOLDER_CONSTANTS = frozenset(
 )
 
 
+_MIME_TYPE_RE = re.compile(
+    r"(?:application|text|image|audio|video|multipart|font|message)/[\w.+-]+(?:;.*)?",
+    re.IGNORECASE,
+)
+# A vendor media type (`application/vnd.github+json`) names a specific
+# product; it stays a distinctive literal.
+_VENDOR_MIME_RE = re.compile(r"/(?:vnd|prs)\.", re.IGNORECASE)
+_EXAMPLE_URL_RE = re.compile(
+    r"(?:https?://)?(?:www\.)?example\.(?:com|org|net)(?:[/:?#].*)?", re.IGNORECASE
+)
+_PSEUDO_NAME_RE = re.compile(r"<[A-Za-z_][\w .-]{0,24}>")
+_BARE_ROUTE_RE = re.compile(r"/[A-Za-z0-9_-]{1,16}/?")
+_ALPHABET = (
+    "0123456789abcdefghijklmnopqrstuvwxyz"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+)
+
+
+def _is_alphabet_run(value: str) -> bool:
+    """True for a contiguous run of a standard digit or letter alphabet."""
+    if len(value) < 6:
+        return False
+    lowered = value.lower()
+    return value in _ALPHABET or lowered in _ALPHABET.lower()
+
+
 _ECOSYSTEM_VOCABULARY = frozenset(
     {
         # HTTP verbs and status classes.
@@ -389,6 +440,14 @@ _ECOSYSTEM_VOCABULARY = frozenset(
         # Common headers and MIME types.
         "CONTENT-TYPE", "ACCEPT", "ACCEPT-ENCODING", "COOKIE", "SET-COOKIE",
         "AUTHORIZATION", "USER-AGENT", "HOST", "CONNECTION", "CACHE-CONTROL",
+        "CONTENT-LENGTH", "CONTENT-ENCODING", "CONTENT-DISPOSITION",
+        "CONTENT-RANGE", "CONTENT-LANGUAGE", "TRANSFER-ENCODING", "LOCATION",
+        "REFERER", "ETAG", "IF-NONE-MATCH", "IF-MODIFIED-SINCE",
+        "LAST-MODIFIED", "EXPIRES", "RANGE", "VARY", "DATE", "SERVER",
+        "UPGRADE", "VIA", "MAX-AGE", "NO-CACHE", "NO-STORE", "ORIGIN", "WWW-AUTHENTICATE", "PROXY-AUTHORIZATION",
+        "PROXY-AUTHENTICATE", "X-FORWARDED-FOR", "X-FORWARDED-PROTO",
+        "X-REQUESTED-WITH", "ACCEPT-LANGUAGE", "ACCEPT-CHARSET", "ACCEPT-RANGES",
+        "KEEP-ALIVE", "RETRY-AFTER", "ALLOW", "EXPECT",
         "APPLICATION/JSON", "APPLICATION/X-WWW-FORM-URLENCODED",
         "TEXT/PLAIN", "TEXT/HTML", "MULTIPART/FORM-DATA",
         # CLI and config conventions.
@@ -430,7 +489,7 @@ def architecture_dna(
     target_modules = _module_names(target)
     shared_modules = {
         m for m in (origin_modules & target_modules)
-        if not is_common(m) and len(m) >= 4
+        if not is_common(m) and m not in _CONVENTION_MODULES and len(m) >= 4
     }
     if shared_modules:
         breadth = min(1.0, len(shared_modules) / 6.0)
@@ -459,10 +518,29 @@ def _dir_topology(profile: RepoProfile) -> set[str]:
     return dirs
 
 
+# Names that mark a repository convention, not a subsystem: test-runner and
+# packaging files, and the module every library in a domain has (`auth`,
+# `exceptions`). Sharing them says two projects follow the same ecosystem.
+_CONVENTION_MODULES = frozenset(
+    {
+        "conftest", "conf", "setup", "noxfile", "tox", "manifest", "auth",
+        "exceptions", "errors", "compat", "helpers", "bugreport",
+        "featurerequest", "config", "version", "constants", "cli", "readme",
+        "makefile", "pyproject", "license", "changelog", "contributing",
+        "authors", "history", "models", "server", "structures", "quickstart",
+    }
+)
+
+
 def _module_names(profile: RepoProfile) -> set[str]:
     names: set[str] = set()
     for f in profile.files:
-        base = f.path.rsplit("/", 1)[-1]
+        parts = f.path.split("/")
+        # Dotfiles and dot-directories (`.pre-commit-config.yaml`,
+        # `.github/ISSUE_TEMPLATE/...`) configure tooling; they are not modules.
+        if any(part.startswith(".") for part in parts):
+            continue
+        base = parts[-1]
         stem = base.rsplit(".", 1)[0]
         if stem not in {"index", "init", "main", "mod", "__init__"}:
             names.add(stem.lower().replace("-", "_").replace("_", ""))

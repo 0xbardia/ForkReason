@@ -1,0 +1,486 @@
+{
+  "directions": [
+    {
+      "baseline": {
+        "confidence": "HIGH",
+        "direction": "NONE",
+        "verdict": "INDEPENDENT"
+      },
+      "chronology": "TARGET_PREDATES_ORIGIN",
+      "chronology_detail": {
+        "basis": "repository creation time",
+        "origin_created": "2011-02-13T18:38:17+00:00",
+        "target_created": "2010-10-18T11:42:40+00:00"
+      },
+      "conflicting": [
+        {
+          "dna_layer": "CODE",
+          "evidence_type": "shared_uncommon_constants",
+          "id": "11c9c2fa522792f27362a8d0",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "Observed, but in tension with the commit timeline, which places the target's first commit before the origin's. 32 uncommon constant(s) appear in both repositories. Refactoring rarely preserves magic numbers.",
+          "score": 0.95,
+          "strength": "HIGH",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        },
+        {
+          "dna_layer": "ARCHITECTURE",
+          "evidence_type": "shared_module_boundaries",
+          "id": "601ca0f8e98a4a492e0eabb4",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "Observed, but in tension with the commit timeline, which places the target's first commit before the origin's. 22 non-generic module name(s) are shared, suggesting the same decomposition rather than the same framework.",
+          "score": 0.9,
+          "strength": "HIGH",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        },
+        {
+          "dna_layer": "BUG",
+          "evidence_type": "shared_defect_signature",
+          "id": "1e9dc9bcfe905b759d36f02a",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "Observed, but in tension with the commit timeline, which places the target's first commit before the origin's. 1 defect signature(s) appear in both repositories. Independent implementations rarely reproduce the same defect in the same form.",
+          "score": 0.62,
+          "strength": "MEDIUM",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        },
+        {
+          "dna_layer": "LANGUAGE",
+          "evidence_type": "shared_domain_vocabulary",
+          "id": "51354570caff092e95155a89",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "Observed, but in tension with the commit timeline, which places the target's first commit before the origin's. 3 distinctive domain term(s) are shared.",
+          "score": 0.59,
+          "strength": "MEDIUM",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        },
+        {
+          "dna_layer": "TEST",
+          "evidence_type": "shared_distinctive_test_names",
+          "id": "ae2d295668df25e20d117542",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "Observed, but in tension with the commit timeline, which places the target's first commit before the origin's. 1 distinctive test name(s) are shared, such as 'test_basic_building'.",
+          "score": 0.54,
+          "strength": "MEDIUM",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        },
+        {
+          "dna_layer": "CODE",
+          "evidence_type": "structural_similarity",
+          "id": "dfa469c8142f622177363548",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "Observed, but in tension with the commit timeline, which places the target's first commit before the origin's. Normalized code structure matches on non-boilerplate tokens across the two repositories.",
+          "score": 0.4525083612040134,
+          "strength": "MEDIUM",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        },
+        {
+          "dna_layer": "ARCHITECTURE",
+          "evidence_type": "directory_topology",
+          "id": "d994810dab5a295abd5e54d3",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "Observed, but in tension with the commit timeline, which places the target's first commit before the origin's. 7 shared top-level and second-level directories indicate the same subsystem decomposition.",
+          "score": 0.41562499999999997,
+          "strength": "MEDIUM",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "dna_layer": "CODE",
+          "evidence_type": "shared_uncommon_constants",
+          "id": "11c9c2fa522792f27362a8d0",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "32 uncommon constant(s) appear in both repositories. Refactoring rarely preserves magic numbers.",
+          "score": 0.95,
+          "strength": "HIGH",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        },
+        {
+          "dna_layer": "ARCHITECTURE",
+          "evidence_type": "shared_module_boundaries",
+          "id": "601ca0f8e98a4a492e0eabb4",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "22 non-generic module name(s) are shared, suggesting the same decomposition rather than the same framework.",
+          "score": 0.9,
+          "strength": "HIGH",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        },
+        {
+          "dna_layer": "HISTORY",
+          "evidence_type": "target_predates_origin",
+          "id": "3b25d2a4d6f19ed0dc734658",
+          "is_counter_signal": true,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "The target repository existed before the origin repository was created. The target cannot have been derived from the origin.",
+          "score": 0.8,
+          "strength": "HIGH",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        },
+        {
+          "dna_layer": "BUG",
+          "evidence_type": "shared_defect_signature",
+          "id": "1e9dc9bcfe905b759d36f02a",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "1 defect signature(s) appear in both repositories. Independent implementations rarely reproduce the same defect in the same form.",
+          "score": 0.62,
+          "strength": "MEDIUM",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        },
+        {
+          "dna_layer": "LANGUAGE",
+          "evidence_type": "shared_domain_vocabulary",
+          "id": "51354570caff092e95155a89",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "3 distinctive domain term(s) are shared.",
+          "score": 0.59,
+          "strength": "MEDIUM",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        },
+        {
+          "dna_layer": "TEST",
+          "evidence_type": "shared_distinctive_test_names",
+          "id": "ae2d295668df25e20d117542",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "1 distinctive test name(s) are shared, such as 'test_basic_building'.",
+          "score": 0.54,
+          "strength": "MEDIUM",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        },
+        {
+          "dna_layer": "CODE",
+          "evidence_type": "structural_similarity",
+          "id": "dfa469c8142f622177363548",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "Normalized code structure matches on non-boilerplate tokens across the two repositories.",
+          "score": 0.4525083612040134,
+          "strength": "MEDIUM",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        },
+        {
+          "dna_layer": "ARCHITECTURE",
+          "evidence_type": "directory_topology",
+          "id": "d994810dab5a295abd5e54d3",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          },
+          "rationale": "7 shared top-level and second-level directories indicate the same subsystem decomposition.",
+          "score": 0.41562499999999997,
+          "strength": "MEDIUM",
+          "target_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          }
+        }
+      ],
+      "origin": "psf/requests",
+      "shared_upstream": null,
+      "target": "pallets/werkzeug",
+      "total_files_origin": 127,
+      "total_files_target": 295,
+      "upstream_score": 0
+    },
+    {
+      "baseline": {
+        "confidence": "HIGH",
+        "direction": "ORIGIN_TO_TARGET",
+        "verdict": "HEAVILY_DERIVED"
+      },
+      "chronology": "ORIGIN_PREDATES_TARGET",
+      "chronology_detail": {
+        "basis": "repository creation time",
+        "origin_created": "2010-10-18T11:42:40+00:00",
+        "target_created": "2011-02-13T18:38:17+00:00"
+      },
+      "conflicting": [],
+      "evidence": [
+        {
+          "dna_layer": "CODE",
+          "evidence_type": "shared_uncommon_constants",
+          "id": "74ced3213c188d6253bf05e4",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          },
+          "rationale": "32 uncommon constant(s) appear in both repositories. Refactoring rarely preserves magic numbers.",
+          "score": 0.95,
+          "strength": "HIGH",
+          "target_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          }
+        },
+        {
+          "dna_layer": "ARCHITECTURE",
+          "evidence_type": "shared_module_boundaries",
+          "id": "9f65cbb8110fb1044473f0ea",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          },
+          "rationale": "22 non-generic module name(s) are shared, suggesting the same decomposition rather than the same framework.",
+          "score": 0.9,
+          "strength": "HIGH",
+          "target_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          }
+        },
+        {
+          "dna_layer": "BUG",
+          "evidence_type": "shared_defect_signature",
+          "id": "9764ad28d48a3a31348f9505",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          },
+          "rationale": "1 defect signature(s) appear in both repositories. Independent implementations rarely reproduce the same defect in the same form.",
+          "score": 0.62,
+          "strength": "MEDIUM",
+          "target_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          }
+        },
+        {
+          "dna_layer": "LANGUAGE",
+          "evidence_type": "shared_domain_vocabulary",
+          "id": "ece1f43c6f2be9bd9ca7cea9",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          },
+          "rationale": "3 distinctive domain term(s) are shared.",
+          "score": 0.59,
+          "strength": "MEDIUM",
+          "target_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          }
+        },
+        {
+          "dna_layer": "TEST",
+          "evidence_type": "shared_distinctive_test_names",
+          "id": "094e5b3a0d802a898089b106",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          },
+          "rationale": "1 distinctive test name(s) are shared, such as 'test_basic_building'.",
+          "score": 0.54,
+          "strength": "MEDIUM",
+          "target_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          }
+        },
+        {
+          "dna_layer": "HISTORY",
+          "evidence_type": "commit_message_vocabulary",
+          "id": "c22b4572d50b0077eee31f11",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          },
+          "rationale": "113 commit-message term(s) are shared. This corroborates a finding but cannot establish one: commit prose overlaps between unrelated projects.",
+          "score": 0.3,
+          "strength": "LOW",
+          "target_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          }
+        },
+        {
+          "dna_layer": "HISTORY",
+          "evidence_type": "origin_predates_target",
+          "id": "d17792fb72da5f7df0fd2d2b",
+          "is_counter_signal": false,
+          "origin_ref": {
+            "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+            "path": null,
+            "repo": "pallets/werkzeug"
+          },
+          "rationale": "The origin repository existed before the target was created, which is consistent with the target following it. Chronology alone does not establish derivation.",
+          "score": 0.2,
+          "strength": "LOW",
+          "target_ref": {
+            "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+            "path": null,
+            "repo": "psf/requests"
+          }
+        }
+      ],
+      "origin": "pallets/werkzeug",
+      "shared_upstream": null,
+      "target": "psf/requests",
+      "total_files_origin": 295,
+      "total_files_target": 127,
+      "upstream_score": 0
+    }
+  ],
+  "provenance": {
+    "captured_on": "2026-10-06",
+    "repositories": {
+      "pallets/werkzeug": {
+        "commit": "594452f6a4fe4de38a544962fbf04bfc9d37fbc2",
+        "commits_in_window": 600,
+        "created_at": 1287402160,
+        "files_in_snapshot": 295
+      },
+      "psf/requests": {
+        "commit": "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60",
+        "commits_in_window": 600,
+        "created_at": 1297622297,
+        "files_in_snapshot": 127
+      }
+    },
+    "scope": "Bounded evidence output from the full pinned profile analysis; excerpts omitted.",
+    "source": "ForkReason GitHub snapshot intake against public GitHub repositories"
+  }
+}

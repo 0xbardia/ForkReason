@@ -37,7 +37,14 @@ and one known defect class is documented below as open.
 
 ## OPEN — blocks certification
 
-### 1. Asymmetric verdict on the canonical sanity pair (HIGH)
+### 1. Asymmetric verdict on the canonical sanity pair (HIGH) — RESOLVED
+
+Resolved after this run: both directions are now `INDEPENDENT` (HIGH and
+MEDIUM). The verdict stage no longer scores divergence without a supported
+derivation, and the evidence layer no longer counts protocol and convention
+literals. Regression: `test_requests_werkzeug_lineage_is_stable_in_both_directions`
+and `test_requests_werkzeug_full_pipeline_is_independent_in_both_directions`.
+The text below records the defect as originally found.
 
 `pallets/werkzeug` vs `psf/requests` returns:
 

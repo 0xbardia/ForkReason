@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
+from pathlib import Path
 
 from forkreason.analysis.dna import (
     _is_distinctive_test_name,
@@ -33,7 +35,8 @@ from forkreason.analysis.dna import (
 from forkreason.analysis.dna import test_dna as analyze_test_dna
 from forkreason.analysis.fingerprint import fingerprint_text
 from forkreason.analysis.scoring import EvidenceBuilder
-from forkreason.domain import CommitEntry, FileEntry, RepoProfile
+from forkreason.analysis.alternatives import ExplanationInputs, evaluate_explanations, select_verdict
+from forkreason.domain import CommitEntry, Evidence, FileEntry, RepoProfile
 
 DAY = 86400
 BASE_TS = 1_600_000_000
@@ -378,3 +381,145 @@ def test_commit_vocabulary_demotion_does_not_silence_history_evidence() -> None:
 
     result = run_pipeline(origin, target, PipelineConfig())
     assert result.outcome.verdict in {"LIKELY_DERIVED", "HEAVILY_DERIVED"}
+
+
+def test_requests_werkzeug_lineage_is_stable_in_both_directions() -> None:
+    """Pin the verdict stage against the evidence that produced the false positive.
+
+    The fixture is the bounded evidence the pipeline emitted for the commit-
+    pinned pair BEFORE the evidence layer was hardened (HTTP headers, `/get`,
+    `0123456789`, `<local>`, dotfiles and `conftest` all counted at 0.95/0.90).
+    Werkzeug -> Requests then read HEAVILY_DERIVED / HIGH. Feeding that same
+    evidence through the verdict stage must now give INDEPENDENT both ways, so
+    the verdict is robust even when a future evidence defect lets noise through.
+    """
+    fixture = json.loads(
+        (Path(__file__).parent / "fixtures" / "requests_werkzeug_evidence.json").read_text()
+    )
+    results = []
+    for row in fixture["directions"]:
+        repos = fixture["provenance"]["repositories"]
+        origin = RepoProfile(
+            full_name=row["origin"], commit_sha=repos[row["origin"]]["commit"],
+            files=(), commits=(), first_commit_at=repos[row["origin"]]["created_at"],
+        )
+        target = RepoProfile(
+            full_name=row["target"], commit_sha=repos[row["target"]]["commit"],
+            files=(), commits=(), first_commit_at=repos[row["target"]]["created_at"],
+        )
+        evidence = tuple(Evidence(**item) for item in row["evidence"])
+        conflicting = tuple(Evidence(**item) for item in row["conflicting"])
+        explanations = evaluate_explanations(
+            ExplanationInputs(
+                origin=origin, target=target, evidence=evidence, conflicting=conflicting,
+                chronology=row["chronology"], chronology_detail=row["chronology_detail"],
+                shared_upstream=row["shared_upstream"], upstream_score=row["upstream_score"],
+                total_files_origin=row["total_files_origin"],
+                total_files_target=row["total_files_target"],
+            )
+        )
+        result = select_verdict(
+            explanations, evidence=evidence, chronology=row["chronology"],
+            shared_upstream=row["shared_upstream"], origin=origin, target=target,
+        )
+        assert result[0] not in {"LIKELY_DERIVED", "HEAVILY_DERIVED"}
+        if row["origin"] == "psf/requests":
+            assert any(item.is_counter_signal for item in evidence)
+            assert conflicting, "chronology counter-evidence must remain in the conflict set"
+        else:
+            assert row["chronology"] == "ORIGIN_PREDATES_TARGET"
+            assert any(item.dna_layer == "HISTORY" for item in evidence)
+        results.append(result)
+
+    assert [result[0] for result in results] == ["INDEPENDENT", "INDEPENDENT"]
+    # The target-before-origin counter-signal raises confidence in the first
+    # direction; reversing inputs preserves the older-origin HISTORY signal,
+    # so confidence is MEDIUM. Directional evidence is retained, while lineage
+    # classification remains independent in both orders.
+    assert [result[1] for result in results] == ["HIGH", "MEDIUM"]
+
+
+# --- Werkzeug / Requests: evidence layer and the full pipeline --------------
+
+
+def test_protocol_and_runtime_literals_are_not_uncommon_constants() -> None:
+    """Classes of literal that any two HTTP projects share carry no lineage."""
+    noise = [
+        "Content-Length", "Transfer-Encoding", "Content-Disposition", "max-age",
+        "application/xml", "text/plain; charset=utf-8", "/get", "/status/200",
+        "0123456789", "abcdefghijklmnopqrstuvwxyz", "0123456789abcdef",
+        "<local>", "<string>", "http://example.com/", "blah", "auth", "domain",
+    ]
+    kept = [v for v in noise if v != "/status/200" and _is_uncommon_constant(v)]
+    assert kept == []
+
+
+def test_module_boundaries_ignore_dotfiles_and_convention_names() -> None:
+    names = [
+        ".pre-commit-config.yaml", ".readthedocs.yaml", "tests/conftest.py",
+        "src/pkg/auth.py", "docs/conf.py", ".github/ISSUE_TEMPLATE/bug-report.md",
+        "src/pkg/lineage_core.py",
+    ]
+    from forkreason.analysis.dna import _module_names
+
+    profile = RepoProfile(
+        full_name="a/b", commit_sha="a" * 40,
+        files=tuple(FileEntry(path=n, size=1, sha256="0" * 64, language="text", text="x") for n in names),
+        commits=(),
+    )
+    assert _module_names(profile) >= {"lineagecore"}
+    assert not {".precommitconfig", ".readthedocs", "bugreport"} & _module_names(profile)
+
+
+def _cached_profile(path: str) -> RepoProfile | None:
+    import dataclasses
+    from pathlib import PurePosixPath
+
+    from forkreason.repos.snapshot import _decode_text, _should_analyze_path, profile_from_cache
+
+    root = Path(path)
+    profile = profile_from_cache(root / "_forkreason_inventory.json")
+    if profile is None:
+        return None
+    files = []
+    for entry in profile.files:
+        file_path = root / entry.path
+        text = None
+        if _should_analyze_path(PurePosixPath(entry.path)) and file_path.is_file():
+            text = _decode_text(file_path.read_bytes()[:2_000_000])
+        files.append(dataclasses.replace(entry, text=text))
+    return dataclasses.replace(profile, files=tuple(files))
+
+
+def test_requests_werkzeug_full_pipeline_is_independent_in_both_directions() -> None:
+    """Run the whole pipeline on the pinned snapshots, when they are cached.
+
+    Skipped on a checkout without the snapshot cache; the bounded fixture test
+    above covers CI. The pinned commits are the ones in the fixture provenance.
+    """
+    import pytest
+
+    from forkreason.analysis.pipeline import PipelineConfig, run_pipeline
+
+    base = Path("/var/lib/forkreason/snapshots")
+    requests_ = _cached_profile(str(base / "psf" / "requests__d6761a5d48981e21"))
+    werkzeug = _cached_profile(str(base / "pallets" / "werkzeug__666a22e61143d5da"))
+    if requests_ is None or werkzeug is None:
+        pytest.skip("pinned Requests/Werkzeug snapshots are not cached on this machine")
+    assert requests_.commit_sha == "611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60"
+    assert werkzeug.commit_sha == "594452f6a4fe4de38a544962fbf04bfc9d37fbc2"
+
+    forward = run_pipeline(requests_, werkzeug, PipelineConfig()).outcome
+    reverse = run_pipeline(werkzeug, requests_, PipelineConfig()).outcome
+
+    assert (forward.verdict, reverse.verdict) == ("INDEPENDENT", "INDEPENDENT")
+    assert forward.direction == reverse.direction == "NONE"
+    # Chronology counter-evidence exists only where the chronology contradicts
+    # the claimed direction, and it is retained there.
+    assert any(item.is_counter_signal for item in forward.evidence)
+    assert forward.conflicting
+    # Reversing the inputs keeps the shared-signal conflict instead of dropping it.
+    assert reverse.conflicting
+    for outcome in (forward, reverse):
+        strong = [i for i in outcome.evidence if i.evidence_type == "shared_uncommon_constants"]
+        assert all(i.score < 0.9 for i in strong), "HTTP/runtime literals must not reach 0.90+"
