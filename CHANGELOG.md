@@ -31,6 +31,11 @@ All notable changes to ForkReason are recorded here. The format follows
   alphabets, interpreter pseudo-names, example URLs, dotfiles or convention
   module names as lineage. Both directions are INDEPENDENT; see
   `test_requests_werkzeug_lineage_is_stable_in_both_directions`.
+- **Stale analyses were replayed forever.** Jobs were keyed on the pinned pair
+  alone, so a pair analysed by an older engine kept its old verdict (production
+  still served Requests → Werkzeug as LIKELY_DERIVED). The engine version is now
+  part of the job key, and an unregistered provisional analysis is replaced by a
+  fresh one; registered cases and cases with a registration in flight never are.
 - A transaction hash the RPC has not indexed yet is retried for 15 minutes
   instead of being rejected, and unverified claims are bounded per case.
 

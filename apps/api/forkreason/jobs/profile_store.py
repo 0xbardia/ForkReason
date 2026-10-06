@@ -19,7 +19,7 @@ import json
 import logging
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from ..analysis.pipeline import PipelineResult
@@ -184,8 +184,10 @@ class ProfileStore:
             session.flush()
 
         # Analysis is provisional until GenLayer accepts submit_case. Revision
-        # zero is an append-only projection of the analysis, not chain state.
+        # zero is a projection of the analysis, not chain state, so a fresh
+        # analysis (a newer engine) may replace it until the case is registered.
         if case.current_revision == 0:
+            self._replace_stale_provisional(session, case, result.manifest_hash)
             self._write_revision(
                 session, case, number=0, outcome=outcome, result=result, submitter=None
             )
@@ -193,6 +195,51 @@ class ProfileStore:
             case.lifecycle = "analysis_ready"
         session.flush()
         return case
+
+    def _replace_stale_provisional(self, session: Session, case: Case, manifest_hash: str) -> None:
+        """Drop an unregistered analysis that a newer analysis supersedes.
+
+        Never touches a registered case (current_revision > 0), and never a case
+        with a registration transaction in flight, whose verified arguments were
+        derived from the analysis it signed.
+        """
+        existing = session.scalar(
+            select(CaseRevision).where(
+                CaseRevision.case_id == case.id, CaseRevision.revision_number == 0
+            )
+        )
+        if existing is None or existing.manifest_hash == manifest_hash:
+            return
+        in_flight = session.scalar(
+            select(ChainTransaction.id).where(
+                ChainTransaction.case_id == case.id,
+                ChainTransaction.kind == "registration",
+                ChainTransaction.status.in_(("consensus_pending", "accepted")),
+            ).limit(1)
+        )
+        if in_flight:
+            return
+        old_ids = session.scalars(
+            select(EvidenceItem.id).where(
+                EvidenceItem.case_id == case.id, EvidenceItem.revision_number == 0
+            )
+        ).all()
+        evidence_refs = {i[:-4] if i.endswith("-0-c") else i[:-2] for i in old_ids}
+        session.execute(delete(EvidenceRelation).where(
+            EvidenceRelation.case_id == case.id,
+            or_(
+                EvidenceRelation.subject_ref.in_(evidence_refs),
+                EvidenceRelation.id.like(f"{case.id}-0-upstream-%"),
+            ),
+        ))
+        for model in (EvidenceItem, AlternativeExplanation):
+            session.execute(delete(model).where(
+                model.case_id == case.id, model.revision_number == 0
+            ))
+        session.execute(delete(CaseRevision).where(
+            CaseRevision.case_id == case.id, CaseRevision.revision_number == 0
+        ))
+        session.expire_all()
 
     def _write_revision(
         self,

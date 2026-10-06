@@ -1364,3 +1364,88 @@ def test_unverified_transaction_claims_per_case_are_bounded(client, session, mon
     ]
     assert statuses[:-1] == [202] * chain_routes.MAX_UNVERIFIED_PER_CASE
     assert statuses[-1] == 409
+
+
+def _reanalysis_result(case, *, verdict: str, evidence_score: float):
+    from forkreason.analysis.pipeline import PipelineResult
+    from forkreason.domain import AlternativeExplanation as ExplanationRecord
+    from forkreason.domain import AnalysisOutcome, Evidence
+    from forkreason.ids import content_hash
+
+    manifest = {
+        "origin": {"full_name": case.origin_full_name, "commit": case.origin_commit},
+        "target": {"full_name": case.target_full_name, "commit": case.target_commit},
+        "engine_probe": verdict,
+    }
+    item = Evidence(
+        id=f"ev{verdict[:3].lower()}", dna_layer="CODE", evidence_type="shared_uncommon_constants",
+        strength="MEDIUM", score=evidence_score, rationale="probe",
+        origin_ref={"repo": case.origin_full_name}, target_ref={"repo": case.target_full_name},
+    )
+    explanation = ExplanationRecord(
+        kind="INDEPENDENT_SAME_SPEC", support="HIGH", score=0.8, rationale="probe", evidence_refs=(item.id,),
+    )
+    outcome = AnalysisOutcome(
+        verdict=verdict, confidence="HIGH", direction="NONE", summary="probe",
+        evidence=(item,), conflicting=(), explanations=(explanation,), upstream_candidates=(),
+        shared_upstream=None, independent_origin_plausibility="HIGH",
+        origin_timeline=(), target_timeline=(),
+    )
+    return PipelineResult(
+        outcome=outcome, manifest=manifest, manifest_hash=content_hash(manifest),
+        consensus_digest="", case_id=case.id, evidence_counts={}, dropped_weak_evidence=0,
+        elapsed_seconds=0.1,
+    )
+
+
+def test_unregistered_analysis_is_replaced_by_a_newer_engine_but_registered_cases_are_not(session, tmp_path) -> None:
+    from forkreason.ids import ANALYSIS_ENGINE_VERSION, idempotency_key_for
+    from forkreason.jobs.profile_store import ProfileStore
+    from forkreason.models import AlternativeExplanation, CaseRevision, ChainTransaction, EvidenceItem
+
+    case, _ = _provisional_case(session)
+    store = ProfileStore(tmp_path)
+    old_manifest_hash = case.manifest_hash
+
+    # The engine version is part of job identity, so an old verdict is not replayed.
+    assert ANALYSIS_ENGINE_VERSION
+    assert idempotency_key_for("a/b", "1" * 40, "c/d", "2" * 40) != idempotency_key_for("c/d", "2" * 40, "a/b", "1" * 40)
+
+    store.persist_case(session, "job", _reanalysis_result(case, verdict="LIKELY_DERIVED", evidence_score=0.9))
+    session.commit()
+    assert session.get(CaseRevision, f"{case.id}-0").verdict == "LIKELY_DERIVED"
+    stale_manifest_hash = case.manifest_hash
+    assert stale_manifest_hash != old_manifest_hash
+
+    # A registration transaction in flight pins the analysis it was built from.
+    session.add(ChainTransaction(
+        id="0x" + "7" * 64, case_id=case.id, kind="registration", network="studionet",
+        status="consensus_pending", payload_summary={},
+    ))
+    session.commit()
+    store.persist_case(session, "job", _reanalysis_result(case, verdict="INDEPENDENT", evidence_score=0.4))
+    session.commit()
+    assert session.get(CaseRevision, f"{case.id}-0").verdict == "LIKELY_DERIVED"
+
+    session.get(ChainTransaction, "0x" + "7" * 64).status = "rejected"
+    session.commit()
+    store.persist_case(session, "job", _reanalysis_result(case, verdict="INDEPENDENT", evidence_score=0.4))
+    session.commit()
+    assert session.get(CaseRevision, f"{case.id}-0").verdict == "INDEPENDENT"
+    assert case.manifest_hash != stale_manifest_hash
+    ids = [row.id for row in session.query(EvidenceItem).filter_by(case_id=case.id, revision_number=0)]
+    assert ids == ["evind-0"], "the superseded evidence is gone, not duplicated"
+    assert session.query(AlternativeExplanation).filter_by(case_id=case.id, revision_number=0).count() == 1
+
+    # Once registered on chain, the case is never rewritten by an analysis.
+    case.current_revision = 1
+    session.add(CaseRevision(
+        id=f"{case.id}-1", case_id=case.id, revision_number=1, verdict="INDEPENDENT", confidence="HIGH",
+        direction="NONE", manifest_hash=case.manifest_hash, manifest={}, summary={}, tx_hash="0x" + "8" * 64,
+    ))
+    session.commit()
+    before = case.manifest_hash
+    store.persist_case(session, "job", _reanalysis_result(case, verdict="LIKELY_DERIVED", evidence_score=0.9))
+    session.commit()
+    assert case.manifest_hash == before and case.current_revision == 1
+    assert session.get(CaseRevision, f"{case.id}-0").verdict == "INDEPENDENT"

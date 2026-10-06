@@ -22,6 +22,11 @@ from typing import Any
 
 _ID_SALT = "forkreason/v1"
 
+# Bump when a change to the forensic engine can alter a verdict. It is part of
+# the job idempotency key, so a pair analysed by an older engine is analysed
+# again instead of being answered with the old, possibly wrong, verdict.
+ANALYSIS_ENGINE_VERSION = "2026-10-06.1"
+
 
 def _coerce(value: Any) -> Any:
     """Normalize a value into a form that serializes identically every time."""
@@ -189,6 +194,7 @@ def idempotency_key_for(origin_full_name: str, origin_commit: str, target_full_n
     return content_hash(
         {
             "kind": "job",
+            "engine": ANALYSIS_ENGINE_VERSION,
             "origin": f"{origin_full_name}@{origin_commit}",
             "target": f"{target_full_name}@{target_commit}",
         }
