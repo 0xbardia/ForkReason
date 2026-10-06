@@ -116,6 +116,27 @@ database append and pointer update. Revision N is never changed. The browser
 polls indexed status, and the worker polls persisted transaction ids so closing
 the page does not stop reconciliation.
 
+### Reconciliation trigger
+
+The smallest mechanism that is reliable without new infrastructure: **the
+browser reports, the worker verifies.** After the wallet returns a transaction
+id the browser posts it to `POST /api/v1/chain/transactions`, which stores a
+`chain_transactions` row (`submitted`). The existing worker process polls those
+rows (`status in submitted, consensus_pending`) from a dedicated thread, so
+closing the page does not stop reconciliation and a restart loses nothing.
+Nothing the browser sends is trusted beyond the id: the verdict, revision and
+challenge come from the chain.
+
+| Property | Behaviour |
+|---|---|
+| Verified per write | network, contract address, sender, method, the exact calldata arguments (decoded from the binary form), execution result, `LATEST_FINAL` `get_case` / `get_revision` / `get_challenge` |
+| Pending | stays `consensus_pending`; the public Case does not change |
+| Atomicity | one transaction appends revision N+1 and moves `current_revision`; a rollback leaves the id `submitted` and the next poll retries |
+| Idempotency / races | the Case row is locked; a second transaction for an existing revision is rejected; a stale observation cannot move the pointer back |
+| Unseen hash | retried for 15 minutes (RPC lag), then `rejected` |
+| Flooding | at most 8 unverified ids per case |
+| RPC budget | contract reads happen only after a successful execution is accepted; rows are polled at most every 10 s; a rate limit backs a row off for 5 minutes (Studio allows 500 `gen_call` per hour) |
+
 GenLayer is authoritative for accepted verdicts and revision order. PostgreSQL
 is the application projection used for fast public Case reads; it cannot
 override chain state. Public chain reads need no wallet, and no server signer
