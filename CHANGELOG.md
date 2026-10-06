@@ -36,6 +36,13 @@ All notable changes to ForkReason are recorded here. The format follows
   still served Requests → Werkzeug as LIKELY_DERIVED). The engine version is now
   part of the job key, and an unregistered provisional analysis is replaced by a
   fresh one; registered cases and cases with a registration in flight never are.
+- **The reconciler could not read a real write.** GenLayer's `readable` calldata
+  is not valid JSON (found by driving the production frontend against Studio),
+  so every real transaction would have been rejected. The binary calldata is now
+  decoded (`scripts/genlayer-calldata.mjs`, pinned to a real captured
+  transaction). Contract reads are metered by the RPC (500 `gen_call`/hour on
+  Studio): they now happen only after acceptance, rows are polled at a bounded
+  cadence, and a rate limit backs the poller off.
 - A transaction hash the RPC has not indexed yet is retried for 15 minutes
   instead of being rejected, and unverified claims are bounded per case.
 

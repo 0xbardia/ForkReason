@@ -1,0 +1,16 @@
+{
+  "provenance": "Real submit_case transaction on GenLayer Studio (studionet), signed through the production ForkReason frontend with a throwaway test key on 2026-10-06. Captured with genlayer-js getTransaction.",
+  "tx_id": "0x106bd2619410dde93c97531f337eb7ad3c30f3a59d8a726aecaa0e175b33bb97",
+  "network": "studionet",
+  "contract": "0xb3c179E52EC98c1114B55CFCB9b3EdFCc5D0d07b",
+  "from": "0x00f04FD09F1Aa7f26BE4923c4667783f43fc5f4e",
+  "status": "FINALIZED",
+  "calldata_base64": "FgRhcmdzNWRwc2YvcmVxdWVzdHPEAjYxMWM2MTYyY2JjNGFjMjAyMGEyZjkxYzdjZmE0ZjNhYmY5YmJiNjCEAXBhbGxldHMvd2Vya3pldWfEAjU5NDQ1MmY2YTRmZTRkZTM4YTU0NDk2MmZiZjA0YmZjOWQzN2ZiYzKEBGFiMmEwZDA3MTAwOTQ5YzUzYzk0ZWMzODA4YjM4NzNkNjBhOTIyODJkYzQ4MTMwMjgxYmZmMWEwMDFjNzRhYjbEE2Nhc2U6IDc4ZjE1NjlhZjg2MGE5ZGM2YWZmMTcyZmRiYmE4ZDExCnJldmlzaW9uOiAwCm9yaWdpbjogcHNmL3JlcXVlc3RzIEAgNjExYzYxNjJjYmM0CnRhcmdldDogcGFsbGV0cy93ZXJremV1ZyBAIDU5NDQ1MmY2YTRmZQpkZXRlcm1pbmlzdGljIHZlcmRpY3Q6IElOREVQRU5ERU5UIC8gSElHSApkaXJlY3Rpb246IE5PTkUKc2hhcmVkX3Vwc3RyZWFtOiBub25lCmV2aWRlbmNlIGNsYXNzZXM6IEFSQ0hJVEVDVFVSRSwgQlVHLCBDT0RFLCBISVNUT1JZLCBMQU5HVUFHRSwgVEVTVApldmlkZW5jZSBjb3VudDogOApjb25mbGljdGluZyBjb3VudDogOAZtZXRob2Rcc3VibWl0X2Nhc2U=",
+  "calldata_readable": "{\"args\":[\"psf/requests\",\"611c6162cbc4ac2020a2f91c7cfa4f3abf9bbb60\",\"pallets/werkzeug\",\"594452f6a4fe4de38a544962fbf04bfc9d37fbc2\",\"ab2a0d07100949c53c94ec3808b3873d60a92282dc48130281bff1a001c74ab6\",\"case: 78f1569af860a9dc6aff172fdbba8d11\\nrevision: 0\\norigin: psf/requests @ 611c6162cbc4\\ntarget: pallets/werkzeug @ 594452f6a4fe\\ndeterministic verdict: INDEPENDENT / HIGH\\ndirection: NONE\\nshared_upstream: none\\nevidence classes: ARCHITECTURE, BUG, CODE, HISTORY, LANGUAGE, TEST\\nevidence count: 8\\nconflicting count: 8\",]\"method\":\"submit_case\"}",
+  "validator_results": [
+    "AAA=",
+    "AAA=",
+    "AAA=",
+    "AAA="
+  ]
+}

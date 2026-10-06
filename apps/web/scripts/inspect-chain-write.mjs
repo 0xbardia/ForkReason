@@ -2,6 +2,8 @@ import { createClient } from "genlayer-js";
 import { localnet, studionet, testnetAsimov, testnetBradbury } from "genlayer-js/chains";
 import { TransactionHashVariant } from "genlayer-js/types";
 
+import { decodeCall } from "./genlayer-calldata.mjs";
+
 const input = JSON.parse(await new Promise((resolve, reject) => {
   let data = "";
   process.stdin.setEncoding("utf8").on("data", (chunk) => (data += chunk));
@@ -25,11 +27,10 @@ if (!transaction) {
   process.exit(0);
 }
 
-let call = null;
-try {
-  const readable = transaction.data?.calldata?.readable;
-  if (typeof readable === "string") call = JSON.parse(readable);
-} catch {}
+// The binary calldata is authoritative; the node's `readable` text is not valid JSON.
+const call = typeof transaction.data?.calldata?.base64 === "string"
+  ? decodeCall(transaction.data.calldata.base64)
+  : null;
 const receipts = [
   ...(transaction.consensus_data?.validators ?? []),
   ...(Array.isArray(transaction.consensus_data?.leader_receipt)
@@ -54,6 +55,7 @@ const tx = {
   call,
 };
 
+const readErrors = [];
 async function read(functionName, args = []) {
   try {
     return await client.readContract({
@@ -63,16 +65,25 @@ async function read(functionName, args = []) {
       transactionHashVariant: TransactionHashVariant.LATEST_FINAL,
       jsonSafeReturn: true,
     });
-  } catch {
+  } catch (error) {
+    readErrors.push(String(error?.details ?? error?.message ?? error).slice(0, 160));
     return null;
   }
 }
 
-const [chainCase, revision, challenge] = await Promise.all([
-  read("get_case", [input.chain_case_id]),
-  read("get_revision", [input.chain_case_id, input.revision_number]),
-  input.revision_number > 1
-    ? read("get_challenge", [`${input.chain_case_id}#${input.revision_number}`])
-    : Promise.resolve(null),
-]);
-process.stdout.write(JSON.stringify({ transaction: tx, case: chainCase, revision, challenge }));
+// Contract reads are metered by the RPC (Studio allows 500 gen_call per hour),
+// and there is nothing to verify until consensus has accepted a successful
+// execution, so earlier polls stay at the transaction lookup.
+const settled = (tx.status === "ACCEPTED" || tx.status === "FINALIZED") && tx.execution_success;
+const [chainCase, revision, challenge] = settled
+  ? await Promise.all([
+      read("get_case", [input.chain_case_id]),
+      read("get_revision", [input.chain_case_id, input.revision_number]),
+      input.revision_number > 1
+        ? read("get_challenge", [`${input.chain_case_id}#${input.revision_number}`])
+        : Promise.resolve(null),
+    ])
+  : [null, null, null];
+process.stdout.write(JSON.stringify({
+  transaction: tx, case: chainCase, revision, challenge, read_errors: readErrors,
+}));

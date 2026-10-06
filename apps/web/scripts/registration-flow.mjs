@@ -3,6 +3,8 @@ import { chromium } from "@playwright/test";
 import { decodeFunctionData, fromHex, fromRlp } from "viem";
 import { studionet } from "genlayer-js/chains";
 
+import { decodeCalldata } from "./genlayer-calldata.mjs";
+
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3111";
 // Same-origin by default so the app's CSP (connect-src 'self') applies unchanged.
 const apiOrigin = process.env.PLAYWRIGHT_API_ORIGIN ?? baseURL;
@@ -18,51 +20,6 @@ const pinned = {
   manifestHash: "a".repeat(64),
   evidenceDigest: "case=a1b2c3d4e5f6; revision=0; pinned evidence",
 };
-
-function decodeCalldata(bytes) {
-  let offset = 0;
-  function readVarint() {
-    let value = 0n;
-    let shift = 0n;
-    let byte;
-    do {
-      byte = bytes[offset++];
-      value |= BigInt(byte & 0x7f) << shift;
-      shift += 7n;
-    } while (byte & 0x80);
-    return value;
-  }
-  function readValue() {
-    const tag = readVarint();
-    const kind = Number(tag & 7n);
-    const length = Number(tag >> 3n);
-    if (kind === 4) {
-      const value = new TextDecoder().decode(bytes.slice(offset, offset + length));
-      offset += length;
-      return value;
-    }
-    if (kind === 5) return Array.from({ length }, readValue);
-    if (kind === 6) {
-      const value = {};
-      for (let i = 0; i < length; i += 1) {
-        const keyLength = Number(readVarint());
-        const key = new TextDecoder().decode(bytes.slice(offset, offset + keyLength));
-        offset += keyLength;
-        value[key] = readValue();
-      }
-      return value;
-    }
-    if (kind === 1) return BigInt(length);
-    if (kind === 2) return -1n - BigInt(length);
-    if (kind === 0 && length === 0) return null;
-    if (kind === 0 && length === 1) return false;
-    if (kind === 0 && length === 2) return true;
-    throw new Error(`Unsupported GenLayer calldata tag: ${tag}`);
-  }
-  const value = readValue();
-  assert.equal(offset, bytes.length, "all submitted calldata should decode");
-  return value;
-}
 
 function decodeWalletWrite(transaction) {
   const outer = decodeFunctionData({

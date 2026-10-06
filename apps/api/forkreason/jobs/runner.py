@@ -21,6 +21,7 @@ from ..analysis.pipeline import PipelineConfig, run_pipeline
 from ..config import get_settings
 from ..db import session_scope
 from ..domain import AnalysisCancelledError, AnalysisError
+from ..chain_reconciliation import POLL_INTERVAL
 from ..models import ChainTransaction
 from . import queue as q
 from .profile_store import ProfileStore
@@ -90,7 +91,11 @@ class AnalysisWorker:
                 with session_scope() as session:
                     pending = session.scalar(
                         select(ChainTransaction)
-                        .where(ChainTransaction.status.in_(("submitted", "consensus_pending")))
+                        .where(
+                            ChainTransaction.status.in_(("submitted", "consensus_pending")),
+                            ChainTransaction.observed_at
+                            <= dt.datetime.now(dt.timezone.utc) - POLL_INTERVAL,
+                        )
                         .order_by(ChainTransaction.observed_at)
                         .limit(1)
                         .with_for_update(skip_locked=True)
@@ -101,12 +106,14 @@ class AnalysisWorker:
                         try:
                             reconcile_transaction(session, pending)
                         except Exception as exc:  # noqa: BLE001 - persisted id stays retryable
-                            log.warning("chain reconciliation will retry", extra={"error": str(exc)[:160]})
+                            log.warning("chain reconciliation will retry: %s", str(exc)[:200])
                         finally:
                             # ponytail: one poller; add a queue only if serial polling bottlenecks.
-                            pending.observed_at = dt.datetime.now(dt.timezone.utc)
+                            now = dt.datetime.now(dt.timezone.utc)
+                            if pending.observed_at is None or pending.observed_at <= now:
+                                pending.observed_at = now
             except Exception as exc:  # noqa: BLE001 - the persisted id remains retryable
-                log.warning("chain reconciliation will retry", extra={"error": str(exc)[:160]})
+                log.warning("chain reconciliation will retry: %s", str(exc)[:200])
             _stop.wait(5.0)
 
     def _recover(self) -> int:

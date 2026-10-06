@@ -14,7 +14,7 @@ obvious one, and records the conclusion as an immutable revision through
 [![contract](https://img.shields.io/badge/contract-verified-12E6A7?style=flat-square)](#genlayer-contract)
 [![direct mode](https://img.shields.io/badge/direct%20mode-51%20tests-13CFF4?style=flat-square)](#testing)
 [![studio mode](https://img.shields.io/badge/studio%20mode-8%20tests-397BFF?style=flat-square)](#testing)
-[![backend](https://img.shields.io/badge/backend-241%20tests-FFC857?style=flat-square)](#testing)
+[![backend](https://img.shields.io/badge/backend-242%20tests-FFC857?style=flat-square)](#testing)
 [![license](https://img.shields.io/badge/license-AGPL--3.0-C8FF4A?style=flat-square)](#license)
 
 </div>
@@ -270,7 +270,7 @@ Backend secrets are never exposed there.
 ## Testing
 
 ```bash
-# Backend — 241 tests
+# Backend — 242 tests
 PYTHONPATH=apps/api .venv/bin/python -m pytest apps/api/tests/ -q
 
 # Contract, Direct Mode — 51 tests, no network needed

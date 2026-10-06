@@ -96,11 +96,18 @@ def reconcile_transaction(session: Session, row: ChainTransaction) -> str:
         row.id, row.network, settings.genlayer_rpc_url,
         settings.genlayer_contract_address or "", chain_case_id, expected_revision,
     )
-    return reconcile_observed_write(
+    status = reconcile_observed_write(
         session, row, observation,
         expected_network=settings.genlayer_network,
         expected_contract=settings.genlayer_contract_address or "",
     )
+    errors = observation.get("read_errors") or []
+    if status in PENDING and errors:
+        log.warning("chain state read failed: %s", errors[0])
+        if any("rate limit" in str(error).lower() for error in errors):
+            # The RPC meters contract reads per hour; wait instead of spending the budget.
+            row.observed_at = dt.datetime.now(dt.timezone.utc) + RATE_LIMIT_BACKOFF - POLL_INTERVAL
+    return status
 
 
 def reconcile_observed_write(
@@ -332,6 +339,8 @@ def reconcile_observed_write(
 
 
 NOT_FOUND_GRACE = dt.timedelta(minutes=15)
+POLL_INTERVAL = dt.timedelta(seconds=10)
+RATE_LIMIT_BACKOFF = dt.timedelta(minutes=5)
 
 
 def _within_grace(row: ChainTransaction) -> bool:

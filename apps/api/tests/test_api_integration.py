@@ -1449,3 +1449,34 @@ def test_unregistered_analysis_is_replaced_by_a_newer_engine_but_registered_case
     session.commit()
     assert case.manifest_hash == before and case.current_revision == 1
     assert session.get(CaseRevision, f"{case.id}-0").verdict == "INDEPENDENT"
+
+
+def test_rate_limited_chain_reads_back_off_instead_of_spending_the_rpc_budget(session, monkeypatch) -> None:
+    import datetime as dt
+    from types import SimpleNamespace
+
+    from forkreason import chain_reconciliation as recon
+    from forkreason.models import ChainTransaction
+
+    case, provisional = _provisional_case(session)
+    contract = "0x" + "a" * 40
+    row = ChainTransaction(
+        id="0x" + "9" * 64, case_id=case.id, kind="registration", network="studionet",
+        status="submitted", payload_summary={},
+    )
+    session.add(row)
+    session.commit()
+    monkeypatch.setattr(recon, "get_settings", lambda: SimpleNamespace(
+        genlayer_network="studionet", genlayer_contract_address=contract,
+        genlayer_rpc_url="https://studio.genlayer.com/api",
+    ))
+    observed = _registration_observation(case, provisional, row.id, contract)
+    observed.update(case=None, revision=None, read_errors=["Rate limit exceeded: 500 requests per hour"])
+    monkeypatch.setattr(recon, "observe_chain_write", lambda *args: observed)
+
+    assert recon.reconcile_transaction(session, row) == "consensus_pending"
+    assert case.current_revision == 0
+    # Not due again until well after the normal poll interval.
+    horizon = dt.datetime.now(dt.timezone.utc) + recon.RATE_LIMIT_BACKOFF - 2 * recon.POLL_INTERVAL
+    observed_at = row.observed_at if row.observed_at.tzinfo else row.observed_at.replace(tzinfo=dt.timezone.utc)
+    assert observed_at > horizon
