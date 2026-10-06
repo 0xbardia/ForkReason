@@ -14,7 +14,8 @@
 
 import "@rainbow-me/rainbowkit/styles.css";
 
-import { RainbowKitProvider, darkTheme, type Theme } from "@rainbow-me/rainbowkit";
+import { connectorsForWallets, RainbowKitProvider, darkTheme, type Theme } from "@rainbow-me/rainbowkit";
+import { injectedWallet } from "@rainbow-me/rainbowkit/wallets";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useMemo, type ReactNode } from "react";
 import { WagmiProvider, http, type Config } from "wagmi";
@@ -24,7 +25,6 @@ import { chainForNetwork, isSupportedNetwork, rpcForNetwork } from "@/lib/genlay
 
 const NETWORK = process.env.NEXT_PUBLIC_GENLAYER_NETWORK ?? "studionet";
 const RPC_URL = rpcForNetwork(NETWORK);
-const CONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "";
 
 /**
  * RainbowKit theme mapped onto ForkReason's tokens so the wallet modal does not
@@ -91,14 +91,12 @@ const theme: Theme = {
 export function Providers({ children }: { children: ReactNode }) {
   const config = useMemo<Config>(() => {
     const chain = chainForNetwork(NETWORK);
-    const projectId = CONNECT_PROJECT_ID;
     return createConfig({
       chains: [chain],
-      connectors: projectId
-        ? // WalletConnect needs a project id. With none configured, RainbowKit
-          // still offers injected and WalletConnect-created (in-wallet) options.
-          []
-        : [],
+      connectors: connectorsForWallets(
+        [{ groupName: "Browser wallet", wallets: [injectedWallet] }],
+        { appName: "ForkReason", projectId: "forkreason-browser-wallet" },
+      ),
       transports: {
         [chain.id]: http(RPC_URL),
       },

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { EvidenceGraph, buildGraph } from "@/components/evidence-graph";
+import { InitialRegistration } from "@/components/initial-registration";
 import { RepoDna } from "@/components/repo-dna";
 import { api, ApiClientError, type CaseReport, type Confidence, type Verdict } from "@/lib/api";
 import {
@@ -135,7 +136,9 @@ export function CaseReportView({ caseId }: { caseId: string }) {
     >
       {/* --- 1. The answer ------------------------------------------- */}
       <section className="case-headline" aria-labelledby="verdict-heading">
-        <p className="eyebrow">Case report · revision {meta.current_revision}</p>
+        <p className="eyebrow">
+          {meta.current_revision === 0 ? "Analysis preview · awaiting GenLayer registration" : `Case report · revision ${meta.current_revision}`}
+        </p>
 
         <h1 id="verdict-heading" className="case-verdict">
           <span className={`case-verdict-badge badge-${verdictMeta.tone}`}>
@@ -196,11 +199,17 @@ export function CaseReportView({ caseId }: { caseId: string }) {
           <Link href={`/case/${meta.id}/evidence`} className="btn btn-secondary btn-sm">
             Open evidence explorer
           </Link>
-          <Link href={`/case/${meta.id}/challenge`} className="btn btn-signal btn-sm">
-            Challenge this finding
-          </Link>
+          {meta.current_revision > 0 ? (
+            <Link href={`/case/${meta.id}/challenge`} className="btn btn-signal btn-sm">
+              Challenge this finding
+            </Link>
+          ) : null}
         </div>
       </section>
+
+      {meta.current_revision === 0 ? (
+        <InitialRegistration report={report} onReconciled={setReport} />
+      ) : null}
 
       {/* --- 2. Repo DNA ----------------------------------------------- */}
       <section className="case-section" aria-labelledby="dna-heading">
@@ -360,10 +369,14 @@ export function CaseReportView({ caseId }: { caseId: string }) {
             <span className="eyebrow">Transaction</span>
             {verdict.tx_hash ? (
               <span className="mono consensus-hash">{verdict.tx_hash}</span>
+            ) : meta.pending_tx_hash ? (
+              <span className="consensus-pending">
+                {meta.chain_status === "consensus_pending" ? "Consensus pending" : "Transaction submitted"}: {meta.pending_tx_hash}
+              </span>
             ) : (
               <span className="consensus-pending">
-                Not yet submitted. Connect a wallet to record this finding on
-                chain — the analysis itself needs no signature.
+                Analysis is provisional. Connect a wallet below to register the
+                pinned commits and evidence on chain.
               </span>
             )}
           </div>
@@ -407,7 +420,7 @@ export function CaseReportView({ caseId }: { caseId: string }) {
         </p>
       </section>
 
-      <section className="case-section case-section-last" aria-labelledby="challenge-cta">
+      {meta.current_revision > 0 ? <section className="case-section case-section-last" aria-labelledby="challenge-cta">
         <h2 id="challenge-cta" className="case-section-heading">
           Disagree with this finding?
         </h2>
@@ -420,7 +433,7 @@ export function CaseReportView({ caseId }: { caseId: string }) {
         <Link href={`/case/${meta.id}/challenge`} className="btn btn-signal">
           Challenge this case
         </Link>
-      </section>
+      </section> : null}
     </div>
   );
 }

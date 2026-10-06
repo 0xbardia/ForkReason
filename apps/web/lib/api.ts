@@ -248,6 +248,9 @@ export interface CaseReport {
     manifest_hash: string;
     current_revision: number;
     lifecycle: string;
+    chain_backed: boolean;
+    chain_status: string | null;
+    pending_tx_hash: string | null;
     created_at: string | null;
   };
   verdict: {
@@ -305,7 +308,7 @@ export interface ChallengePreparation {
   write: {
     contract: string;
     method: string;
-    args: unknown[];
+    args: [string, number, string, string];
     requires_wallet_signature: boolean;
   };
   next_step: string;
@@ -321,6 +324,37 @@ export interface ContractInfo {
   read_methods: string[];
   write_methods: string[];
   note: string;
+}
+
+export type SubmitCaseArgs = [
+  originRepo: string,
+  originCommit: string,
+  targetRepo: string,
+  targetCommit: string,
+  manifestHash: string,
+  evidenceDigest: string,
+];
+
+export interface SubmitCasePreparation {
+  case_id: string;
+  revision_number: 0;
+  manifest_hash: string;
+  evidence_digest: string;
+  chain: { network: string; rpc_url: string; contract_address: string };
+  write: {
+    contract: "ForkReasonRegistry";
+    method: "submit_case";
+    args: SubmitCaseArgs;
+    requires_wallet_signature: true;
+  };
+}
+
+export interface ChainTransactionView {
+  tx_hash: string;
+  case_id: string | null;
+  kind: string;
+  network?: string;
+  status: string;
 }
 
 // --- endpoints ------------------------------------------------------------
@@ -356,6 +390,31 @@ export const api = {
 
   getCase(caseId: string, signal?: AbortSignal) {
     return request<CaseReport>(`/api/v1/cases/${encodeURIComponent(caseId)}`, { signal });
+  },
+
+  prepareSubmission(caseId: string) {
+    return request<SubmitCasePreparation>("/api/v1/chain/submit-preparation", {
+      method: "POST",
+      body: JSON.stringify({ case_id: caseId, revision_number: 0 }),
+    });
+  },
+
+  recordChainWrite(input: {
+    case_id: string;
+    tx_hash: string;
+    kind: "registration" | "challenge";
+    challenge_id?: string;
+  }) {
+    return request<ChainTransactionView>("/api/v1/chain/transactions", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  getChainTransaction(txHash: string) {
+    return request<ChainTransactionView>(
+      `/api/v1/chain/transactions/${encodeURIComponent(txHash)}`,
+    );
   },
 
   getEvidence(

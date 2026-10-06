@@ -42,7 +42,13 @@ const CHAINS: Record<GenLayerNetwork, GenLayerChain> = {
 
 export function resolveChain(network: string | undefined): GenLayerChain {
   const key = (network ?? "studionet") as GenLayerNetwork;
-  return CHAINS[key] ?? studionet;
+  const chain = CHAINS[key];
+  if (!chain) throw new Error(`Unsupported GenLayer network: ${network}`);
+  return chain;
+}
+
+export function walletMatchesNetwork(network: string, chainId: number | undefined): boolean {
+  return chainId === resolveChain(network).id;
 }
 
 export function isSupportedNetwork(network: number | undefined): boolean {
@@ -138,6 +144,7 @@ export type TxPhase =
   | "awaiting_decision"
   | "finalizing"
   | "accepted"
+  | "pending"
   | "failed"
   | "undetermined";
 
@@ -167,6 +174,7 @@ export async function writeContract(
     network?: string;
   },
   onPhase?: (phase: TxPhase) => void,
+  onSubmitted?: (txId: string) => void | Promise<void>,
 ): Promise<WriteResult> {
   const target = contractAddress();
   if (!target) {
@@ -179,6 +187,9 @@ export async function writeContract(
   if (!params.account) {
     return { ok: false, phase: "failed", message: "No wallet address is connected." };
   }
+  if (params.functionName === "submit_case" && params.args.length !== 6) {
+    return { ok: false, phase: "failed", message: "Registration requires all six contract arguments." };
+  }
 
   let txId: string;
   try {
@@ -190,7 +201,6 @@ export async function writeContract(
       provider: params.provider as never,
     });
 
-    onPhase?.("submitted");
     // 1.1.8 requires `value`, and returns the GenLayer transaction id.
     txId = (await client.writeContract({
       address: target,
@@ -198,6 +208,16 @@ export async function writeContract(
       args: params.args as never[],
       value: BigInt(0),
     })) as string;
+    if (!/^0x[0-9a-f]{64}$/i.test(txId)) {
+      return { ok: false, phase: "failed", message: "GenLayer returned an invalid transaction id." };
+    }
+    onPhase?.("submitted");
+    try {
+      await onSubmitted?.(txId);
+    } catch {
+      // The caller retains the id locally and the worker can reconcile after
+      // the API becomes available again.
+    }
   } catch (error) {
     return { ok: false, phase: "failed", message: readableChainError(error) };
   }
@@ -207,16 +227,16 @@ export async function writeContract(
     const client = readClient(params.network);
     const receipt = await client.waitForTransactionReceipt({
       hash: txId as never,
-      status: TransactionStatus.ACCEPTED,
+      status: TransactionStatus.FINALIZED,
       interval: 3000,
-      retries: 40,
+      retries: 80,
     });
+    const transaction = await client.getTransaction({ hash: txId as never });
 
     const statusName =
-      (receipt as { statusName?: string }).statusName ?? "UNKNOWN";
-    const executionResult =
-      (receipt as { txExecutionResultName?: string }).txExecutionResultName ??
-      ExecutionResult.NOT_VOTED;
+      (receipt as { statusName?: string }).statusName ??
+      (transaction as { statusName?: string }).statusName ?? "UNKNOWN";
+    const executionResult = observedExecutionResult(transaction);
 
     // A decided transaction can still have failed. Check both.
     if (executionResult !== ExecutionResult.FINISHED_WITH_RETURN) {
@@ -225,11 +245,10 @@ export async function writeContract(
         phase: "failed",
         txId,
         statusName,
-        executionResult,
-        message:
-          executionResult === ExecutionResult.FINISHED_WITH_ERROR
-            ? "The transaction was decided but the contract reverted, so no state changed."
-            : "The transaction was decided but the contract did not complete successfully.",
+        executionResult: executionResult ?? undefined,
+        message: executionResult === ExecutionResult.FINISHED_WITH_ERROR
+          ? "The transaction finalized with a contract error, so no Case revision was registered."
+          : "The transaction finalized, but its successful contract execution could not be verified.",
       };
     }
 
@@ -240,22 +259,42 @@ export async function writeContract(
         phase: "undetermined",
         txId,
         statusName,
-        executionResult,
+        executionResult: executionResult ?? undefined,
         message:
           "Validators did not reach a decision. The case can be appealed on GenLayer.",
       };
     }
 
     onPhase?.("accepted");
-    return { ok: true, phase: "accepted", txId, statusName, executionResult };
-  } catch (error) {
+    return { ok: true, phase: "accepted", txId, statusName, executionResult: executionResult ?? undefined };
+  } catch {
     return {
       ok: false,
-      phase: "failed",
+      phase: "pending",
       txId,
-      message: readableChainError(error),
+      message: "Transaction sent. Consensus is still pending; ForkReason will keep following this transaction.",
     };
   }
+}
+
+function observedExecutionResult(receipt: unknown): string | null {
+  if (!receipt || typeof receipt !== "object") return null;
+  const tx = receipt as {
+    txExecutionResultName?: string;
+    consensus_data?: { validators?: Array<{ result?: string }> };
+  };
+  if (tx.txExecutionResultName) return tx.txExecutionResultName;
+  const outcomes = tx.consensus_data?.validators?.map((validator) => {
+    if (!validator.result) return null;
+    try {
+      return atob(validator.result).charCodeAt(0) === 0;
+    } catch {
+      return false;
+    }
+  }) ?? [];
+  if (outcomes.length > 0 && outcomes.every(Boolean)) return ExecutionResult.FINISHED_WITH_RETURN;
+  if (outcomes.some((outcome) => outcome === false)) return ExecutionResult.FINISHED_WITH_ERROR;
+  return null;
 }
 
 export async function transactionStatus(
@@ -334,6 +373,7 @@ export const STATUS_LABELS: Record<string, string> = {
   COMMITTING: "Validators committing",
   REVEALING: "Validators revealing",
   ACCEPTED: "Decision reached",
+  pending: "Consensus pending",
   UNDETERMINED: "Undetermined",
   FINALIZED: "Finalized",
   CANCELED: "Canceled",

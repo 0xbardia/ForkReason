@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useWalletClient } from "wagmi";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { api, ApiClientError, type ChallengePreparation } from "@/lib/api";
-import { writeContract, statusLabel, type TxPhase } from "@/lib/genlayer";
+import { writeContract, statusLabel, walletMatchesNetwork, type TxPhase } from "@/lib/genlayer";
+import { GENLAYER_NETWORK } from "@/components/providers";
 
 const PHASE_COPY: Record<TxPhase, string> = {
   idle: "",
@@ -14,7 +16,8 @@ const PHASE_COPY: Record<TxPhase, string> = {
   submitted: "Transaction submitted to the GenLayer network.",
   awaiting_decision: "Validators are reaching consensus. This is not instant.",
   finalizing: "Recording the transaction reference…",
-  accepted: "Challenge submitted. The revision appears once consensus completes.",
+  accepted: "Consensus finalized. ForkReason is reconciling the accepted revision.",
+  pending: "Transaction sent. Consensus is still pending.",
   failed: "",
   undetermined: "",
 };
@@ -27,7 +30,7 @@ const PHASE_COPY: Record<TxPhase, string> = {
  * could act for the user.
  */
 export function ChallengeView({ caseId }: { caseId: string }) {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
   const { data: walletClient } = useWalletClient();
 
   const [rationale, setRationale] = useState("");
@@ -38,7 +41,62 @@ export function ChallengeView({ caseId }: { caseId: string }) {
   const [result, setResult] = useState<{ txId: string; statusName?: string } | null>(null);
 
   const canPrepare = rationale.trim().length >= 10 && evidenceSummary.trim().length >= 10;
-  const canSign = Boolean(isConnected && address && walletClient && preparation);
+  const network = preparation?.chain.network ?? GENLAYER_NETWORK;
+  const walletOnNetwork = walletMatchesNetwork(network, walletClient?.chain?.id ?? chainId);
+  const canSign = Boolean(isConnected && address && walletClient && preparation && walletOnNetwork);
+
+  useEffect(() => {
+    if (!result?.txId || !preparation || !["accepted", "pending", "awaiting_decision"].includes(phase)) return;
+    let stopped = false;
+    const sync = async () => {
+      try {
+        await api.recordChainWrite({
+          case_id: caseId, tx_hash: result.txId, kind: "challenge",
+          challenge_id: preparation.challenge_id,
+        });
+        const status = await api.getChainTransaction(result.txId);
+        if (status.status === "failed" || status.status === "rejected") {
+          window.localStorage.removeItem(`forkreason:challenge:${caseId}`);
+          setError("GenLayer finalized this transaction without accepting the challenge. The existing revision remains unchanged.");
+          setPhase("failed");
+          return;
+        }
+        if (status.status === "undetermined") {
+          setError("GenLayer consensus was undetermined. The current revision remains unchanged.");
+          setPhase("undetermined");
+          return;
+        }
+        if (status.status === "consensus_pending") setPhase("pending");
+        const report = await api.getCase(caseId);
+        if (!stopped && report.case.current_revision >= preparation.expected_revision) {
+          window.localStorage.removeItem(`forkreason:challenge:${caseId}`);
+          setResult({ txId: result.txId, statusName: "FINALIZED" });
+          setPhase("accepted");
+          setError(null);
+        }
+      } catch {
+        // The durable transaction id remains in local storage and the worker retries.
+      }
+    };
+    void sync();
+    const timer = window.setInterval(() => void sync(), 5000);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [caseId, phase, preparation, result]);
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem(`forkreason:challenge:${caseId}`);
+    if (!raw) return;
+    try {
+      const pending = JSON.parse(raw) as { tx_hash: string; challenge_id: string };
+      setResult({ txId: pending.tx_hash });
+      setPhase("pending");
+      void api.recordChainWrite({
+        case_id: caseId, tx_hash: pending.tx_hash, kind: "challenge", challenge_id: pending.challenge_id,
+      }).catch(() => undefined);
+    } catch {
+      window.localStorage.removeItem(`forkreason:challenge:${caseId}`);
+    }
+  }, [caseId]);
 
   async function prepare() {
     if (!canPrepare) return;
@@ -72,18 +130,23 @@ export function ChallengeView({ caseId }: { caseId: string }) {
         args: preparation.write.args,
         account: address,
         provider: walletClient,
+        network: preparation.chain.network,
       },
       setPhase,
+      async (txId) => {
+        setResult({ txId });
+        window.localStorage.setItem(`forkreason:challenge:${caseId}`, JSON.stringify({
+          tx_hash: txId, challenge_id: preparation.challenge_id,
+        }));
+        await api.recordChainWrite({
+          case_id: caseId, tx_hash: txId, kind: "challenge", challenge_id: preparation.challenge_id,
+        });
+      },
     );
 
     if (outcome.ok && outcome.txId) {
       setResult({ txId: outcome.txId, statusName: outcome.statusName });
       setPhase("accepted");
-      try {
-        await api.markChallengeSubmitted(caseId, preparation.challenge_id, outcome.txId);
-      } catch {
-        // Indexing failure must not invalidate a signed transaction.
-      }
       return;
     }
 
@@ -237,6 +300,14 @@ export function ChallengeView({ caseId }: { caseId: string }) {
           </div>
         ) : null}
 
+        {preparation && isConnected && !walletOnNetwork ? (
+          <p className="challenge-connect-note" role="alert">
+            Switch your wallet to {preparation.chain.network} before signing.
+          </p>
+        ) : null}
+
+        {!isConnected ? <ConnectButton /> : null}
+
         {phase && PHASE_COPY[phase] ? (
           <p className="challenge-phase" role="status" aria-live="polite">
             {PHASE_COPY[phase]}
@@ -276,9 +347,9 @@ export function ChallengeView({ caseId }: { caseId: string }) {
               type="button"
               className="btn btn-signal"
               onClick={() => void sign()}
-              disabled={!canSign || phase === "awaiting_signature" || phase === "submitted" || phase === "awaiting_decision"}
+              disabled={!canSign || ["awaiting_signature", "submitted", "awaiting_decision", "pending"].includes(phase)}
             >
-              {phase === "awaiting_signature" || phase === "submitted" || phase === "awaiting_decision"
+              {phase === "awaiting_signature" || phase === "submitted" || phase === "awaiting_decision" || phase === "pending"
                 ? "Waiting for consensus…"
                 : isConnected
                   ? "Sign with your wallet"

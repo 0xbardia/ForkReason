@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:unit": "node --test --experimental-strip-types \"lib/**/*.test.ts\"",
+    "test:e2e": "node scripts/registration-flow.mjs",
     "check": "npm run typecheck && npm run lint",
     "build:next-only": "next build"
   },
