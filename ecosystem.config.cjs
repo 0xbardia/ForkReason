@@ -159,7 +159,7 @@ module.exports = {
       // Run the standalone server bundle directly, which is what Next requires
       // under `output: "standalone"`. Two earlier shapes were wrong:
       //   `npx next start`  - PM2 supervised the wrapper, so stopping it left
-      //     `next-server` alive holding :3100; the next restart died with
+      //     `next-server` alive holding :3112; the next restart died with
       //     EADDRINUSE and the orphan served a stale build, which is why every
       //     case route returned 404 while the API returned 200.
       //   `node next/dist/bin/next start` - refused outright by Next under
@@ -173,7 +173,7 @@ module.exports = {
         ...common,
         PATH: `${NODE_BIN}:/usr/local/bin:/usr/bin:/bin`,
         NODE_ENV: "production",
-        PORT: "3100",
+        PORT: "3112",
         NEXT_PUBLIC_APP_URL: env.NEXT_PUBLIC_APP_URL || "https://forkreason.bydx.fun",
         NEXT_PUBLIC_API_URL: env.NEXT_PUBLIC_API_URL || "",
         NEXT_PUBLIC_GENLAYER_NETWORK: env.NEXT_PUBLIC_GENLAYER_NETWORK || "",

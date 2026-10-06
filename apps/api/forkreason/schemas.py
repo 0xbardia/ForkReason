@@ -32,7 +32,7 @@ class SubmitCasePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     case_id: str = Field(min_length=8, max_length=64, pattern=r"^[0-9a-f]+$")
-    revision_number: int = Field(ge=1, le=10_000)
+    revision_number: int = Field(ge=0, le=10_000)
 
 
 class RecordRevisionPayload(BaseModel):

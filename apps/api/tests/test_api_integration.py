@@ -458,9 +458,21 @@ def test_challenge_for_unknown_case(client: TestClient) -> None:
     assert response.status_code == 404
 
 
-def test_challenge_payload_requires_signing(client: TestClient) -> None:
+def test_challenge_payload_requires_signing(client: TestClient, monkeypatch) -> None:
     """The prepared payload must never contain signature material."""
     from forkreason.models import Case, CaseRevision
+    from types import SimpleNamespace
+    from forkreason.routes import cases as cases_routes
+
+    monkeypatch.setattr(
+        cases_routes, "get_settings",
+        lambda: SimpleNamespace(
+            genlayer_contract_address="0x" + "a" * 40,
+            genlayer_network="studionet",
+            genlayer_rpc_url="https://studio.genlayer.com/api",
+            max_manifest_digest_chars=6000,
+        ),
+    )
 
     with db_module.session_scope() as s:
         s.add(
@@ -498,6 +510,8 @@ def test_challenge_payload_requires_signing(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["write"]["requires_wallet_signature"] is True
+    assert body["write"]["args"][0] == "deadbeef"
+    assert body["write"]["args"][1] == 1
     assert body["base_revision"] == 1
     assert body["expected_revision"] == 2
     for banned in ("private_key", "privateKey", "seed", "mnemonic", "signWith"):
@@ -525,10 +539,15 @@ def test_unknown_transaction(client: TestClient) -> None:
     assert client.get("/api/v1/chain/transactions/0xdeadbeef").status_code == 404
 
 
-def test_submit_preparation_requires_configured_contract(client: TestClient) -> None:
-    settings = get_settings()
-    if settings.genlayer_contract_address:
-        pytest.skip("contract is configured in this environment")
+def test_submit_preparation_requires_configured_contract(client: TestClient, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from forkreason.routes import chain as chain_routes
+
+    monkeypatch.setattr(
+        chain_routes, "get_settings",
+        lambda: SimpleNamespace(genlayer_contract_address=None),
+    )
     response = client.post(
         "/api/v1/chain/submit-preparation",
         json={"case_id": "abc123abc123", "revision_number": 1},
@@ -662,10 +681,12 @@ def test_persisted_case_records_pinned_commits_and_manifest(tmp_path) -> None:
         assert case.origin_commit == "a" * 40, case.origin_commit
         assert case.target_commit == "b" * 40, case.target_commit
 
-        revision = session.get(CaseRevision, "testcase1234567890-1")
+        revision = session.get(CaseRevision, "testcase1234567890-0")
         assert revision is not None
         assert revision.manifest == manifest
         assert revision.manifest_hash == manifest_hash(manifest)
+        assert case.current_revision == 0
+        assert case.lifecycle == "analysis_ready"
     finally:
         session.rollback()
         session.close()
@@ -813,3 +834,533 @@ def test_startup_gate_actually_runs() -> None:
 
     source = inspect.getsource(main_module.create_app)
     assert "validate_startup" in source, "create_app does not validate configuration"
+
+
+def _provisional_case(session):
+    from forkreason.ids import case_id_for, content_hash
+    from forkreason.models import Case, CaseRevision
+
+    origin, target = "psf/requests", "pallets/werkzeug"
+    origin_commit, target_commit = "1" * 40, "2" * 40
+    manifest = {
+        "origin": {"full_name": origin, "commit": origin_commit},
+        "target": {"full_name": target, "commit": target_commit},
+    }
+    manifest_hash = content_hash(manifest)
+    case_id = case_id_for(origin, origin_commit, target, target_commit)
+    case = Case(
+        id=case_id, origin_full_name=origin, target_full_name=target,
+        origin_commit=origin_commit, target_commit=target_commit,
+        manifest_hash=manifest_hash, current_revision=0, lifecycle="analysis_ready",
+    )
+    revision = CaseRevision(
+        id=f"{case_id}-0", case_id=case_id, revision_number=0,
+        verdict="INDEPENDENT", confidence="HIGH", direction="NONE",
+        manifest_hash=manifest_hash, manifest=manifest, summary={"layers": []},
+    )
+    session.add_all((case, revision))
+    session.commit()
+    return case, revision
+
+
+def test_submit_preparation_returns_exact_six_abi_arguments(client, session, monkeypatch) -> None:
+    """The API mapping uses contract order and derives from the pinned Case."""
+    from types import SimpleNamespace
+
+    from forkreason.routes import chain as chain_routes
+
+    case, _revision = _provisional_case(session)
+    monkeypatch.setattr(
+        chain_routes, "get_settings",
+        lambda: SimpleNamespace(
+            genlayer_contract_address="0x" + "a" * 40,
+            genlayer_network="studionet",
+            genlayer_rpc_url="https://studio.genlayer.com/api",
+            max_manifest_digest_chars=6000,
+        ),
+    )
+    response = client.post(
+        "/api/v1/chain/submit-preparation",
+        json={"case_id": case.id, "revision_number": 0},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["write"]["method"] == "submit_case"
+    assert body["write"]["requires_wallet_signature"] is True
+    assert body["write"]["args"] == [
+        case.origin_full_name, case.origin_commit,
+        case.target_full_name, case.target_commit,
+        case.manifest_hash, body["evidence_digest"],
+    ]
+    assert len(body["write"]["args"]) == 6
+
+
+def test_submit_case_mapping_rejects_missing_pins_and_malformed_manifest(session) -> None:
+    from forkreason.chain_payloads import build_submit_case_args
+
+    case, revision = _provisional_case(session)
+    case.target_commit = ""
+    with pytest.raises(ValueError, match="pinned repositories"):
+        build_submit_case_args(case, revision, "evidence")
+    case.target_commit = "2" * 40
+    revision.manifest_hash = "not-hex"
+    with pytest.raises(ValueError, match="manifest identity"):
+        build_submit_case_args(case, revision, "evidence")
+
+
+def test_submit_case_mapping_order_matches_the_shipping_contract_abi() -> None:
+    import ast
+
+    from forkreason.chain_payloads import SubmitCaseArgs
+
+    source = (ROOT / "contracts" / "forkreason_registry.py").read_text()
+    module = ast.parse(source)
+    registry = next(
+        node for node in module.body
+        if isinstance(node, ast.ClassDef) and node.name == "ForkReasonRegistry"
+    )
+    function = next(
+        node for node in registry.body
+        if isinstance(node, ast.FunctionDef) and node.name == "submit_case"
+    )
+    abi = [arg for arg in function.args.args if arg.arg != "self"]
+
+    assert [arg.arg for arg in abi] == list(SubmitCaseArgs._fields)
+    assert all(isinstance(arg.annotation, ast.Name) and arg.annotation.id == "str" for arg in abi)
+
+
+def test_unverified_registration_hash_is_retryable_then_blocks_when_chain_pending(client, session, monkeypatch, tmp_path) -> None:
+    from types import SimpleNamespace
+
+    from forkreason.routes import chain as chain_routes
+
+    case, _ = _provisional_case(session)
+    monkeypatch.setattr(
+        chain_routes, "get_settings",
+        lambda: SimpleNamespace(
+            genlayer_contract_address="0x" + "a" * 40,
+            genlayer_network="studionet",
+            genlayer_rpc_url="https://studio.genlayer.com/api",
+            max_manifest_digest_chars=6000,
+            snapshot_dir=tmp_path,
+        ),
+    )
+    first = "0x" + "5" * 64
+    path = "/api/v1/chain/transactions"
+    payload = {"case_id": case.id, "tx_hash": first, "kind": "registration"}
+    response = client.post(path, json=payload)
+    assert response.status_code == 202
+    assert response.json()["status"] == "submitted"
+    replay = client.post(path, json=payload)
+    assert replay.status_code == 202
+    assert replay.json()["tx_hash"] == first
+    from forkreason.models import ChainTransaction
+    # A claimed hash cannot freeze registration or appear pending before the
+    # read-only worker has verified its contract calldata.
+    assert client.post(
+        "/api/v1/chain/submit-preparation",
+        json={"case_id": case.id, "revision_number": 0},
+    ).status_code == 200
+    assert client.get(f"/api/v1/cases/{case.id}").json()["case"]["pending_tx_hash"] is None
+    session.get(ChainTransaction, first).status = "consensus_pending"
+    session.commit()
+    assert client.post(
+        "/api/v1/chain/submit-preparation",
+        json={"case_id": case.id, "revision_number": 0},
+    ).status_code == 409
+    duplicate = client.post(path, json={**payload, "tx_hash": "0x" + "6" * 64})
+    assert duplicate.status_code == 409
+    assert duplicate.json()["error"]["code"] == "registration_pending"
+
+
+def _registration_observation(case, revision, tx_id, contract, *, status="FINALIZED", method="submit_case", args=None):
+    from forkreason.chain_payloads import build_submit_case_args
+    from forkreason.routes.chain import _digest_for
+
+    submit_args = list(build_submit_case_args(case, revision, _digest_for(case, revision)))
+    return {
+        "transaction": {
+            "tx_id": tx_id, "status": status, "execution_success": True,
+            "to": contract, "from": "0x" + "b" * 40,
+            "call": {"method": method, "args": submit_args if args is None else args},
+        },
+        "case": {
+            "case_id": revision.manifest_hash,
+            "origin_repo": case.origin_full_name, "origin_commit": case.origin_commit,
+            "target_repo": case.target_full_name, "target_commit": case.target_commit,
+            "manifest_hash": revision.manifest_hash, "submitter": "0x" + "b" * 40,
+            "current_revision": 1, "lifecycle": "RESOLVED",
+        },
+        "revision": {
+            "case_id": revision.manifest_hash, "revision_number": 1,
+            "manifest_hash": revision.manifest_hash, "verdict": "INDEPENDENT",
+            "confidence": "HIGH", "direction": "NONE", "shared_upstream": "",
+            "independent_origin_plausibility": "HIGH", "evidence_classes": ["CODE"],
+            "rationale": "The repositories are independently implemented.", "is_current": True,
+        },
+        "challenge": None,
+    }
+
+
+def test_accepted_registration_reconciles_to_the_public_case_view(client, session) -> None:
+    from forkreason.chain_reconciliation import reconcile_observed_write
+    from forkreason.models import AlternativeExplanation, CaseRevision, ChainTransaction, EvidenceItem, EvidenceRelation
+
+    case, provisional = _provisional_case(session)
+    evidence = EvidenceItem(
+        id="evidence-hash-0", case_id=case.id, revision_number=0,
+        dna_layer="CODE", evidence_type="shared_function", strength="MEDIUM", score=0.6,
+        rationale="Pinned code evidence.", origin_source={"repo": case.origin_full_name},
+        target_source={"repo": case.target_full_name}, excerpt="bounded",
+    )
+    explanation = AlternativeExplanation(
+        id=f"{case.id}-0-INDEPENDENT_SAME_SPEC", case_id=case.id, revision_number=0,
+        kind="INDEPENDENT_SAME_SPEC", support="HIGH", score=0.8,
+        rationale="Independent implementations.", evidence_refs=["evidence-hash"],
+    )
+    relation = EvidenceRelation(
+        id="evidence-relation-0", case_id=case.id, subject_kind="evidence",
+        subject_ref="evidence-hash", relation="observed_in", object_kind="repository",
+        object_ref=case.origin_full_name, weight=0.6,
+    )
+    tx_id, contract = "0x" + "c" * 64, "0x" + "a" * 40
+    row = ChainTransaction(
+        id=tx_id, case_id=case.id, kind="registration", network="studionet",
+        status="submitted", payload_summary={},
+    )
+    session.add_all((evidence, explanation, relation, row))
+    session.commit()
+    observed = _registration_observation(case, provisional, tx_id, contract)
+
+    assert reconcile_observed_write(
+        session, row, observed, expected_network="studionet", expected_contract=contract,
+    ) == "accepted"
+    session.commit()
+    # Replaying the same finalized observation is idempotent.
+    assert reconcile_observed_write(
+        session, row, observed, expected_network="studionet", expected_contract=contract,
+    ) == "accepted"
+    session.commit()
+
+    assert case.current_revision == 1
+    assert session.get(CaseRevision, f"{case.id}-0").verdict == "INDEPENDENT"
+    assert session.get(CaseRevision, f"{case.id}-1").tx_hash == tx_id
+    assert session.get(EvidenceItem, "evidence-hash-0").revision_number == 0
+    assert session.get(EvidenceItem, "evidence-hash-1").revision_number == 1
+    assert session.get(AlternativeExplanation, f"{case.id}-1-INDEPENDENT_SAME_SPEC").evidence_refs == ["evidence-hash-1"]
+    assert session.get(EvidenceRelation, "evidence-relation-0").subject_ref == "evidence-hash"
+    assert session.get(EvidenceRelation, "evidence-relation-0-1").subject_ref == "evidence-hash-1"
+
+    public_case = client.get(f"/api/v1/cases/{case.id}").json()
+    assert public_case["case"]["current_revision"] == 1
+    assert public_case["verdict"]["revision_number"] == 1
+    assert public_case["verdict"]["tx_hash"] == tx_id
+    assert [revision["revision_number"] for revision in public_case["revisions"]] == [1]
+    assert public_case["evidence"][0]["id"] == "evidence-hash-1"
+
+
+def _challenge_fixture(session):
+    from forkreason.models import CaseRevision, ChainTransaction, Challenge
+
+    case, provisional = _provisional_case(session)
+    initial_tx = "0x" + "d" * 64
+    case.current_revision = 1
+    case.lifecycle = "resolved"
+    case.submitter = "0x" + "b" * 40
+    revision = CaseRevision(
+        id=f"{case.id}-1", case_id=case.id, revision_number=1,
+        verdict="INDEPENDENT", confidence="HIGH", direction="NONE",
+        manifest_hash=provisional.manifest_hash, manifest=provisional.manifest,
+        summary={"layers": ["CODE"]}, tx_hash=initial_tx, network="studionet",
+    )
+    rationale = "The shared implementation came from an earlier common ancestor."
+    digest = "CHALLENGE against revision 1: new pinned evidence"
+    challenge = Challenge(
+        id="challenge-attempt-1", case_id=case.id, base_revision=1,
+        submitter="0xclient", rationale=rationale, evidence_refs=["new evidence"],
+        evidence_digest=digest, status="submitted", tx_hash="0x" + "e" * 64,
+    )
+    tx = ChainTransaction(
+        id=challenge.tx_hash, case_id=case.id, kind="challenge", network="studionet",
+        status="submitted", payload_summary={"challenge_id": challenge.id},
+    )
+    session.add_all((revision, challenge, tx))
+    session.commit()
+    return case, revision, challenge, tx
+
+
+def _challenge_observation(case, revision, challenge, tx, contract, *, status="FINALIZED", challenge_base=1):
+    chain_case_id = revision.manifest_hash
+    manifest_hash = "f" * 64
+    return {
+        "transaction": {
+            "tx_id": tx.id, "status": status, "execution_success": True, "to": contract,
+            "from": "0x" + "9" * 40,
+            "call": {"method": "challenge_case", "args": [
+                chain_case_id, challenge.base_revision, challenge.rationale, challenge.evidence_digest,
+            ]},
+        },
+        "case": {
+            "case_id": chain_case_id, "origin_repo": case.origin_full_name,
+            "origin_commit": case.origin_commit, "target_repo": case.target_full_name,
+            "target_commit": case.target_commit, "manifest_hash": revision.manifest_hash,
+            "submitter": case.submitter, "current_revision": 2,
+            "lifecycle": "CHALLENGED",
+        },
+        "revision": {
+            "case_id": chain_case_id, "revision_number": 2,
+            "manifest_hash": manifest_hash, "verdict": "SHARED_UPSTREAM",
+            "confidence": "MEDIUM", "direction": "NONE", "shared_upstream": "acme/common",
+            "independent_origin_plausibility": "MEDIUM", "evidence_classes": ["HISTORY"],
+            "rationale": "The chain accepted the common ancestor evidence.", "is_current": True,
+        },
+        "challenge": {
+            "case_id": chain_case_id, "base_revision": challenge_base,
+            "submitter": "0x" + "9" * 40, "rationale": challenge.rationale,
+            "manifest_hash": manifest_hash, "status": "RECORDED",
+        },
+    }
+
+
+def test_accepted_challenge_appends_revision_and_updates_public_case(client, session) -> None:
+    from forkreason.chain_reconciliation import reconcile_observed_write
+    from forkreason.models import CaseRevision
+
+    case, revision1, challenge, tx = _challenge_fixture(session)
+    original = (revision1.verdict, revision1.confidence, revision1.manifest_hash, revision1.tx_hash)
+    contract = "0x" + "a" * 40
+    observed = _challenge_observation(case, revision1, challenge, tx, contract)
+
+    assert reconcile_observed_write(
+        session, tx, observed, expected_network="studionet", expected_contract=contract,
+    ) == "accepted"
+    session.commit()
+    assert reconcile_observed_write(
+        session, tx, observed, expected_network="studionet", expected_contract=contract,
+    ) == "accepted"
+    session.commit()
+
+    assert case.current_revision == 2
+    assert (revision1.verdict, revision1.confidence, revision1.manifest_hash, revision1.tx_hash) == original
+    assert session.get(CaseRevision, f"{case.id}-2").verdict == "SHARED_UPSTREAM"
+    assert challenge.resulting_revision == 2 and challenge.status == "recorded"
+    public_case = client.get(f"/api/v1/cases/{case.id}").json()
+    assert public_case["case"]["current_revision"] == 2
+    assert public_case["verdict"]["verdict"] == "SHARED_UPSTREAM"
+    assert [item["revision_number"] for item in public_case["revisions"]] == [1, 2]
+
+
+def test_pending_malformed_and_stale_chain_observations_fail_closed(client, session) -> None:
+    from forkreason.chain_reconciliation import reconcile_observed_write
+    from forkreason.models import ChainTransaction
+
+    case, provisional = _provisional_case(session)
+    contract = "0x" + "a" * 40
+    pending_tx = ChainTransaction(
+        id="0x" + "1" * 64, case_id=case.id, kind="registration", network="studionet",
+        status="submitted", payload_summary={},
+    )
+    session.add(pending_tx)
+    session.commit()
+    pending = _registration_observation(case, provisional, pending_tx.id, contract, status="PROPOSING")
+    assert reconcile_observed_write(
+        session, pending_tx, pending, expected_network="studionet", expected_contract=contract,
+    ) == "consensus_pending"
+    session.commit()
+    assert case.current_revision == 0
+
+    malformed_tx = ChainTransaction(
+        id="0x" + "2" * 64, case_id=case.id, kind="registration", network="studionet",
+        status="submitted", payload_summary={},
+    )
+    session.add(malformed_tx)
+    session.commit()
+    malformed = _registration_observation(case, provisional, malformed_tx.id, contract)
+    malformed["transaction"]["call"]["method"] = "challenge_case"
+    assert reconcile_observed_write(
+        session, malformed_tx, malformed, expected_network="studionet", expected_contract=contract,
+    ) == "rejected"
+    session.commit()
+    assert case.current_revision == 0
+
+    stale_tx = ChainTransaction(
+        id="0x" + "3" * 64, case_id=case.id, kind="registration", network="studionet",
+        status="submitted", payload_summary={},
+    )
+    session.add(stale_tx)
+    session.commit()
+    stale = _registration_observation(case, provisional, stale_tx.id, contract)
+    stale["case"]["current_revision"] = 2
+    assert reconcile_observed_write(
+        session, stale_tx, stale, expected_network="studionet", expected_contract=contract,
+    ) == "rejected"
+    assert case.current_revision == 0
+
+    forged_tx = ChainTransaction(
+        id="0x" + "7" * 64, case_id=case.id, kind="registration", network="studionet",
+        status="submitted", payload_summary={},
+    )
+    session.add(forged_tx)
+    session.commit()
+    forged = _registration_observation(case, provisional, "0x" + "8" * 64, contract)
+    assert reconcile_observed_write(
+        session, forged_tx, forged, expected_network="studionet", expected_contract=contract,
+    ) == "rejected"
+
+    wrong_contract_tx = ChainTransaction(
+        id="0x" + "9" * 64, case_id=case.id, kind="registration", network="studionet",
+        status="submitted", payload_summary={},
+    )
+    session.add(wrong_contract_tx)
+    session.commit()
+    wrong_contract = _registration_observation(case, provisional, wrong_contract_tx.id, contract)
+    assert reconcile_observed_write(
+        session, wrong_contract_tx, wrong_contract,
+        expected_network="studionet", expected_contract="0x" + "f" * 40,
+    ) == "rejected"
+
+    wrong_network_tx = ChainTransaction(
+        id="0x" + "a" * 64, case_id=case.id, kind="registration", network="testnet_bradbury",
+        status="submitted", payload_summary={},
+    )
+    session.add(wrong_network_tx)
+    session.commit()
+    wrong_network = _registration_observation(case, provisional, wrong_network_tx.id, contract)
+    assert reconcile_observed_write(
+        session, wrong_network_tx, wrong_network,
+        expected_network="studionet", expected_contract=contract,
+    ) == "rejected"
+    assert case.current_revision == 0
+
+
+def test_database_rollback_keeps_transaction_retryable(session) -> None:
+    from forkreason.chain_reconciliation import reconcile_observed_write
+    from forkreason.models import Case, CaseRevision, ChainTransaction
+
+    case, provisional = _provisional_case(session)
+    contract, tx_id = "0x" + "a" * 40, "0x" + "4" * 64
+    tx = ChainTransaction(
+        id=tx_id, case_id=case.id, kind="registration", network="studionet",
+        status="submitted", payload_summary={},
+    )
+    session.add(tx)
+    session.commit()
+    observed = _registration_observation(case, provisional, tx_id, contract)
+
+    reconcile_observed_write(session, tx, observed, expected_network="studionet", expected_contract=contract)
+    session.rollback()  # simulate failure of the atomic projection commit after chain finality
+    retry = session.get(ChainTransaction, tx_id)
+    assert retry is not None and retry.status == "submitted"
+    assert session.get(Case, case.id).current_revision == 0
+    assert session.get(CaseRevision, f"{case.id}-1") is None
+
+    assert reconcile_observed_write(
+        session, retry, observed, expected_network="studionet", expected_contract=contract,
+    ) == "accepted"
+    session.commit()
+    assert session.get(Case, case.id).current_revision == 1
+
+
+def test_stale_replays_cannot_roll_the_case_back_or_duplicate_a_revision(client, session) -> None:
+    from forkreason.chain_reconciliation import reconcile_observed_write
+    from forkreason.models import CaseRevision, ChainTransaction
+
+    case, revision1, challenge, tx = _challenge_fixture(session)
+    contract = "0x" + "a" * 40
+    observed = _challenge_observation(case, revision1, challenge, tx, contract)
+    late_id = "0x" + "1" * 64
+    stale = _registration_observation(case, session.get(CaseRevision, f"{case.id}-0"), late_id, contract)
+    assert reconcile_observed_write(
+        session, tx, observed, expected_network="studionet", expected_contract=contract,
+    ) == "accepted"
+    session.commit()
+    revision2 = session.get(CaseRevision, f"{case.id}-2")
+    snapshot = (case.current_revision, revision2.tx_hash, revision2.manifest_hash)
+
+    # A late registration observation (revision 1) for a Case already at 2.
+    late = ChainTransaction(
+        id=late_id, case_id=case.id, kind="registration", network="studionet",
+        status="submitted", payload_summary={},
+    )
+    session.add(late)
+    session.commit()
+    assert reconcile_observed_write(
+        session, late, stale, expected_network="studionet", expected_contract=contract,
+    ) == "rejected"
+
+    # A second transaction claiming the same challenge cannot add or replace revision 2.
+    other = ChainTransaction(
+        id="0x" + "2" * 64, case_id=case.id, kind="challenge", network="studionet",
+        status="submitted", payload_summary={"challenge_id": challenge.id},
+    )
+    session.add(other)
+    session.commit()
+    replay = _challenge_observation(case, revision1, challenge, other, contract)
+    assert reconcile_observed_write(
+        session, other, replay, expected_network="studionet", expected_contract=contract,
+    ) == "rejected"
+    session.commit()
+    response = client.post(
+        "/api/v1/chain/transactions",
+        json={"case_id": case.id, "tx_hash": "0x" + "3" * 64, "kind": "challenge", "challenge_id": challenge.id},
+    )
+    assert response.status_code == 409
+
+    session.expire_all()
+    revision2 = session.get(CaseRevision, f"{case.id}-2")
+    assert (case.current_revision, revision2.tx_hash, revision2.manifest_hash) == snapshot
+    assert session.query(CaseRevision).filter_by(case_id=case.id, revision_number=2).count() == 1
+    assert [r["revision_number"] for r in client.get(f"/api/v1/cases/{case.id}").json()["revisions"]] == [1, 2]
+
+
+def test_unseen_transaction_is_retried_inside_the_grace_window_then_rejected(session) -> None:
+    import datetime as dt
+
+    from forkreason.chain_reconciliation import reconcile_observed_write
+    from forkreason.models import ChainTransaction
+
+    case, _ = _provisional_case(session)
+    contract = "0x" + "a" * 40
+    fresh = ChainTransaction(
+        id="0x" + "5" * 64, case_id=case.id, kind="registration", network="studionet",
+        status="submitted",
+        payload_summary={"recorded_at": dt.datetime.now(dt.timezone.utc).isoformat()},
+    )
+    old = ChainTransaction(
+        id="0x" + "6" * 64, case_id=case.id, kind="registration", network="studionet",
+        status="submitted",
+        payload_summary={"recorded_at": (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1)).isoformat()},
+    )
+    session.add_all((fresh, old))
+    session.commit()
+    for row in (fresh, old):
+        missing = {"transaction": {"tx_id": row.id, "status": "NOT_FOUND"}}
+        reconcile_observed_write(session, row, missing, expected_network="studionet", expected_contract=contract)
+    # An RPC that has not indexed the wallet's hash yet must not lose the write.
+    assert fresh.status == "submitted"
+    assert old.status == "rejected"
+    assert case.current_revision == 0
+
+
+def test_unverified_transaction_claims_per_case_are_bounded(client, session, monkeypatch, tmp_path) -> None:
+    from types import SimpleNamespace
+
+    from forkreason.routes import chain as chain_routes
+
+    case, _ = _provisional_case(session)
+    monkeypatch.setattr(
+        chain_routes, "get_settings",
+        lambda: SimpleNamespace(
+            genlayer_contract_address="0x" + "a" * 40, genlayer_network="studionet",
+            genlayer_rpc_url="https://studio.genlayer.com/api", max_manifest_digest_chars=6000,
+            snapshot_dir=tmp_path,
+        ),
+    )
+    statuses = [
+        client.post("/api/v1/chain/transactions", json={
+            "case_id": case.id, "tx_hash": "0x" + f"{index:064x}", "kind": "registration",
+        }).status_code
+        for index in range(1, chain_routes.MAX_UNVERIFIED_PER_CASE + 2)
+    ]
+    assert statuses[:-1] == [202] * chain_routes.MAX_UNVERIFIED_PER_CASE
+    assert statuses[-1] == 409

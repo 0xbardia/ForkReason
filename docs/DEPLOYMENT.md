@@ -7,7 +7,7 @@ ForkReason runs at **https://forkreason.bydx.fun**.
 ```
 nginx (TLS, security headers)
   │
-  ├── /                 → 127.0.0.1:3100   forkreason-web   (Next.js)
+  ├── /                 → 127.0.0.1:3112   forkreason-web   (Next.js)
   ├── /_next/static/    → cached immutably
   ├── /api/             → 127.0.0.1:8421   forkreason-api   (FastAPI)
   ├── /health           → 127.0.0.1:8421

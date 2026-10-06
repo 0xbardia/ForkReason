@@ -261,6 +261,7 @@ class Challenge(Base):
     submitter: Mapped[str] = mapped_column(String(128), nullable=False)
     rationale: Mapped[str] = mapped_column(Text, default="")
     evidence_refs: Mapped[list[Any]] = mapped_column(JSON, default=list)
+    evidence_digest: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), default="prepared")
     resulting_revision: Mapped[int | None] = mapped_column(Integer)
     tx_hash: Mapped[str | None] = mapped_column(String(80))
@@ -283,6 +284,7 @@ class ChainTransaction(Base):
     status: Mapped[str] = mapped_column(String(32))
     block_number: Mapped[int | None] = mapped_column(Integer)
     payload_summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    # Also acts as last poll time so the single chain worker round-robins rows.
     observed_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

@@ -7,19 +7,25 @@ prepares payloads. It never signs a user transaction, and there is no
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..db import get_db
-from ..errors import bad_request, not_found
-from ..models import Case, CaseRevision
+from ..errors import bad_request, conflict, not_found
+from ..models import Case, CaseRevision, ChainTransaction, Challenge
 from ..schemas import SubmitCasePayload
+from ..chain_payloads import build_submit_case_args
 
 log = logging.getLogger(__name__)
+
+MAX_UNVERIFIED_PER_CASE = 8
 
 router = APIRouter(tags=["chain"])
 
@@ -70,13 +76,7 @@ async def contract_info() -> dict:
             "consensus": "Reached consensus",
             "state": "FINALIZED",
             "verified_read": "get_case_count returned 0 (Accepted)",
-            "note": (
-                "Deployed and read on Studio. The address above is shown "
-                "truncated as Studio displays it; the full address is not "
-                "wired into this deployment, so writes remain refused here "
-                "rather than being sent to an address this server cannot "
-                "verify."
-            ),
+            "note": "Source hash and deployed address were verified against the release transaction.",
         },
     }
 
@@ -98,17 +98,35 @@ async def prepare_submission(payload: SubmitCasePayload, session: Session = Depe
     case = session.get(Case, payload.case_id)
     if case is None:
         raise not_found("case_not_found", "That case does not exist.")
+    if payload.revision_number != 0:
+        raise bad_request("invalid_registration_revision", "Initial registration must use provisional analysis revision 0.")
+
+    if case.current_revision != 0:
+        raise conflict("case_already_registered", "This analyzed case already has an accepted chain revision.")
+    pending = session.scalar(
+        select(ChainTransaction.id).where(
+            ChainTransaction.case_id == case.id,
+            ChainTransaction.kind == "registration",
+            ChainTransaction.status.in_(("consensus_pending", "accepted")),
+        ).limit(1)
+    )
+    if pending:
+        raise conflict("registration_pending", "A registration transaction is already being followed.")
 
     revision = session.scalar(
         select(CaseRevision).where(
             CaseRevision.case_id == case.id,
-            CaseRevision.revision_number == payload.revision_number,
+            CaseRevision.revision_number == 0,
         )
     )
     if revision is None:
         raise not_found("revision_not_found", "That revision does not exist.")
 
     digest = _digest_for(case, revision)
+    try:
+        args = build_submit_case_args(case, revision, digest)
+    except ValueError as exc:
+        raise bad_request("invalid_registration_data", str(exc)) from exc
 
     return {
         "case_id": case.id,
@@ -125,16 +143,12 @@ async def prepare_submission(payload: SubmitCasePayload, session: Session = Depe
         "write": {
             "contract": "ForkReasonRegistry",
             "method": "submit_case",
-            "args": [
-                case.origin_full_name,
-                revision.manifest_hash,
-                digest,
-            ],
+            "args": list(args),
             "requires_wallet_signature": True,
         },
         "next_step": (
-            "Review the transaction in your wallet and sign. ForkReason will "
-            "index the resulting transaction hash."
+            "Review and sign with your connected wallet. The transaction hash "
+            "is indexed immediately and the accepted revision is reconciled from GenLayer."
         ),
     }
 
@@ -155,7 +169,79 @@ def _digest_for(case: Case, revision: CaseRevision) -> str:
         f"evidence count: {summary.get('evidence_count', 0)}",
         f"conflicting count: {summary.get('conflicting_count', 0)}",
     ]
-    return bounded_excerpt("\n".join(lines), get_settings().max_manifest_digest_chars) or ""
+    return bounded_excerpt("\n".join(lines), min(6000, get_settings().max_manifest_digest_chars)) or ""
+
+
+class ChainWriteSubmitted(BaseModel):
+    case_id: str = Field(min_length=8, max_length=64, pattern=r"^[0-9a-f]+$")
+    tx_hash: str = Field(pattern=r"^0x[0-9a-fA-F]{64}$")
+    kind: Literal["registration", "challenge"]
+    challenge_id: str | None = Field(default=None, max_length=128)
+
+
+@router.post("/chain/transactions", status_code=202)
+async def record_chain_write(payload: ChainWriteSubmitted, session: Session = Depends(get_db)) -> dict:
+    """Persist the wallet-produced transaction id before consensus polling."""
+    from ..jobs.profile_store import ProfileStore
+
+    settings = get_settings()
+    case = session.get(Case, payload.case_id)
+    if case is None:
+        raise not_found("case_not_found", "That case does not exist.")
+    tx_hash = payload.tx_hash.lower()
+    existing = session.get(ChainTransaction, tx_hash)
+    if existing is not None:
+        if existing.case_id != case.id or existing.kind != payload.kind:
+            raise conflict("transaction_already_indexed", "That transaction belongs to a different write.")
+        return {"tx_hash": tx_hash, "status": existing.status}
+
+    # Unverified ids are cheap to claim and costly to check, so bound them.
+    unverified = session.scalar(
+        select(func.count()).select_from(ChainTransaction).where(
+            ChainTransaction.case_id == case.id,
+            ChainTransaction.status.in_(("submitted", "consensus_pending")),
+        )
+    )
+    if (unverified or 0) >= MAX_UNVERIFIED_PER_CASE:
+        raise conflict("too_many_pending_transactions", "This case already has several transactions awaiting verification.")
+
+    summary: dict[str, str] = {"recorded_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+    if payload.kind == "registration":
+        if payload.challenge_id is not None:
+            raise bad_request("invalid_registration", "Initial registration cannot include a challenge id.")
+        if case.current_revision != 0:
+            raise conflict("case_already_registered", "This case already has an accepted chain revision.")
+        pending = session.scalar(
+            select(ChainTransaction.id).where(
+                ChainTransaction.case_id == case.id,
+                ChainTransaction.kind == "registration",
+                ChainTransaction.status.in_(("consensus_pending", "accepted")),
+            ).limit(1)
+        )
+        if pending:
+            raise conflict("registration_pending", "Another registration transaction is already being followed.")
+    else:
+        if not payload.challenge_id:
+            raise bad_request("challenge_required", "A challenge id is required.")
+        challenge = session.get(Challenge, payload.challenge_id)
+        if challenge is None or challenge.case_id != case.id:
+            raise not_found("challenge_not_found", "That challenge does not exist.")
+        if challenge.status not in {"prepared", "failed"}:
+            if challenge.tx_hash == tx_hash:
+                return {"tx_hash": tx_hash, "status": challenge.status}
+            raise conflict("challenge_already_submitted", "This challenge already has a transaction.")
+        if challenge.base_revision != case.current_revision:
+            raise conflict("stale_challenge", "The Case changed after this challenge was prepared.")
+        challenge.tx_hash = tx_hash
+        challenge.status = "submitted"
+        summary["challenge_id"] = challenge.id
+
+    ProfileStore(settings.snapshot_dir).record_chain_transaction(
+        session, tx_hash=tx_hash, case_id=case.id, kind=payload.kind,
+        network=settings.genlayer_network, status="submitted", payload_summary=summary,
+    )
+    session.commit()
+    return {"tx_hash": tx_hash, "status": "submitted"}
 
 
 def _contract_source_sha256() -> str | None:

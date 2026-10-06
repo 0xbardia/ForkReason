@@ -11,7 +11,7 @@ the chain.
                     └───────┬──────────┬───────┘
                             │          │
                    ┌────────▼───┐  ┌───▼──────────────┐
-                   │ web :3100  │  │ api :8421        │
+                   │ web :3112  │  │ api :8421        │
                    │ Next.js    │  │ FastAPI          │
                    └────────────┘  └───┬──────────────┘
                                          │
@@ -84,6 +84,42 @@ If the database says revision 2 and the chain says revision 1, the chain wins
 and the database row is treated as stale cache to be corrected. This is the
 single most important invariant in the system, because the product's claim is
 that a finding is *checkable by anyone*.
+
+## Registration and revision projection
+
+Repository analysis creates a provisional database revision 0. It is visible as
+an analysis preview, but it is not represented as an accepted GenLayer case.
+The case page requests a typed six-string `submit_case` payload from the API,
+checks that its repositories, pinned commits and manifest still match the
+selected preview, then creates the GenLayer write client in the browser from
+the connected RainbowKit wallet. The wallet signs the ordered arguments:
+
+```text
+origin_repo, origin_commit, target_repo, target_commit, manifest_hash, evidence_digest
+```
+
+The browser stores the returned transaction id locally and posts it to the API
+before it waits for consensus. The API and existing worker use the read-only
+GenLayer SDK to verify the transaction's network, contract, calldata, sender,
+execution result and finalized contract state. Pending writes remain pending;
+the public Case pointer advances only after the accepted on-chain revision is
+verified. An atomic PostgreSQL transaction appends revision 1 and advances the
+pointer from 0. If that transaction rolls back, the submitted chain id remains
+indexed and the worker retries it; the browser's local copy covers an API
+outage before indexing. The browser polls indexed status and the public Case;
+it never supplies verdict data to the reconciler.
+
+A challenge follows the same boundary: current revision N → browser-wallet
+`challenge_case` write for the stable initial manifest id and base revision N →
+consensus → verified `get_challenge` and `get_revision(N+1)` reads → one atomic
+database append and pointer update. Revision N is never changed. The browser
+polls indexed status, and the worker polls persisted transaction ids so closing
+the page does not stop reconciliation.
+
+GenLayer is authoritative for accepted verdicts and revision order. PostgreSQL
+is the application projection used for fast public Case reads; it cannot
+override chain state. Public chain reads need no wallet, and no server signer
+exists.
 
 ## The API's role
 

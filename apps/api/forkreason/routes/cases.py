@@ -8,6 +8,7 @@ without a waterfall, while keeping every field bounded.
 from __future__ import annotations
 
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
@@ -22,6 +23,7 @@ from ..models import (
     AlternativeExplanation,
     Case,
     CaseRevision,
+    ChainTransaction,
     Challenge,
     EvidenceItem,
     EvidenceRelation,
@@ -70,9 +72,16 @@ async def get_case(case_id: str, session: Session = Depends(get_db)) -> dict:
         raise not_found("case_not_found", "That case does not exist.")
 
     revision = _current_revision(session, case)
+    pending_registration = session.scalar(
+        select(ChainTransaction).where(
+            ChainTransaction.case_id == case.id,
+            ChainTransaction.kind == "registration",
+            ChainTransaction.status.in_(("consensus_pending", "accepted")),
+        ).order_by(ChainTransaction.observed_at.desc()).limit(1)
+    ) if case.current_revision == 0 else None
     revisions = session.scalars(
         select(CaseRevision)
-        .where(CaseRevision.case_id == case.id)
+        .where(CaseRevision.case_id == case.id, CaseRevision.revision_number > 0)
         .order_by(CaseRevision.revision_number)
     ).all()
 
@@ -111,6 +120,9 @@ async def get_case(case_id: str, session: Session = Depends(get_db)) -> dict:
             "manifest_hash": case.manifest_hash,
             "current_revision": case.current_revision,
             "lifecycle": case.lifecycle,
+            "chain_backed": case.current_revision > 0,
+            "chain_status": pending_registration.status if pending_registration else None,
+            "pending_tx_hash": pending_registration.id if pending_registration else None,
             "created_at": case.created_at.isoformat() if case.created_at else None,
         },
         "verdict": {
@@ -285,13 +297,15 @@ async def prepare_challenge(
     no endpoint that submits a user write (spec FR-K-003/008).
     """
     settings = get_settings()
+    if not settings.genlayer_contract_address:
+        raise bad_request("contract_not_configured", "ForkReason's GenLayer contract is not configured on this deployment.")
     case = session.get(Case, case_id)
     if case is None:
         raise not_found("case_not_found", "That case does not exist.")
 
     revision = _current_revision(session, case)
     challenge = Challenge(
-        id=f"{case.id}-{case.current_revision + 1}",
+        id=uuid.uuid4().hex,
         case_id=case.id,
         base_revision=case.current_revision,
         submitter=payload.submitter,
@@ -299,10 +313,20 @@ async def prepare_challenge(
         evidence_refs=[payload.evidence_summary[:400]],
         status="prepared",
     )
-    session.add(challenge)
-    session.flush()
+    if case.current_revision < 1:
+        raise conflict("case_not_registered", "Register this analysis on GenLayer before challenging it.")
+    initial = session.scalar(
+        select(CaseRevision).where(
+            CaseRevision.case_id == case.id, CaseRevision.revision_number == 1
+        )
+    )
+    if initial is None:
+        raise conflict("case_not_registered", "The accepted initial GenLayer revision is missing.")
 
     digest = _challenge_digest(case, revision, payload)
+    challenge.evidence_digest = digest
+    session.add(challenge)
+    session.commit()
 
     return {
         "challenge_id": challenge.id,
@@ -319,7 +343,7 @@ async def prepare_challenge(
         "write": {
             "contract": "ForkReasonRegistry",
             "method": "challenge_case",
-            "args": [case.id, case.current_revision, payload.rationale, digest],
+            "args": [initial.manifest_hash, case.current_revision, payload.rationale, digest],
             # Explicitly no signature material: the wallet supplies this.
             "requires_wallet_signature": True,
         },
@@ -370,42 +394,14 @@ async def mark_challenge_submitted(
     This indexes chain state; it never asserts a verdict. The revision appears
     only after the chain reports it (constitution V.21).
     """
-    from ..jobs.profile_store import ProfileStore
+    from .chain import ChainWriteSubmitted, record_chain_write
 
-    challenge = session.get(Challenge, challenge_id)
-    if challenge is None or challenge.case_id != case_id:
-        raise not_found("challenge_not_found", "That challenge does not exist.")
-    if challenge.status != "prepared":
-        raise conflict(
-            "challenge_already_submitted",
-            "This challenge already has a recorded transaction.",
-        )
-
-    tx_hash = payload.tx_hash
-
-    settings = get_settings()
-    ProfileStore(settings.snapshot_dir).record_chain_transaction(
-        session,
-        tx_hash=tx_hash,
-        case_id=case_id,
-        kind="challenge",
-        network=settings.genlayer_network,
-        status="submitted",
-        payload_summary={"challenge_id": challenge_id},
-    )
-    challenge.tx_hash = tx_hash
-    challenge.status = "submitted"
-    session.commit()
-
-    return {
-        "challenge_id": challenge_id,
-        "tx_hash": tx_hash,
-        "status": "submitted",
-        "note": (
-            "Recorded for indexing. The revision appears once the GenLayer "
-            "consensus for this transaction has been observed."
+    return await record_chain_write(
+        ChainWriteSubmitted(
+            case_id=case_id, tx_hash=payload.tx_hash, kind="challenge", challenge_id=challenge_id
         ),
-    }
+        session,
+    )
 
 
 # --- helpers -------------------------------------------------------------
@@ -473,7 +469,7 @@ def _challenge_digest(case: Case, revision: CaseRevision, payload: ChallengePrep
         f"{bounded_excerpt(payload.evidence_summary, 1200)}\n"
         "</forkreason_evidence>\n"
     )
-    return body[: get_settings().max_manifest_digest_chars]
+    return body[: min(6000, get_settings().max_manifest_digest_chars)]
 
 
 def _sha256_hex(value: str) -> str:

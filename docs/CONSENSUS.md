@@ -121,6 +121,21 @@ evidence too.
 A challenge must reference the **current** revision. A challenge racing another
 is rejected rather than silently overwriting it.
 
+The web application has a separate projection step after contract consensus.
+Analysis is stored as provisional revision 0. The visitor's browser wallet
+signs `submit_case(origin_repo, origin_commit, target_repo, target_commit,
+manifest_hash, evidence_digest)`. Its transaction id is persisted before
+waiting. The API and queue worker read the transaction and `LATEST_FINAL`
+contract state, verify the exact write and accepted revision, then atomically
+append revision 1 and update the public Case pointer.
+
+For a challenge, the browser signs `challenge_case` against the stable initial
+manifest id and current base revision N. After consensus, the worker verifies
+the recorded chain challenge and revision N+1, then appends N+1 without
+changing N. The worker retries indexed transactions after a database rollback.
+GenLayer remains the authority; PostgreSQL is only the fast public Case
+projection.
+
 ## What this does not claim
 
 Being explicit, because the temptation to overclaim is strong:

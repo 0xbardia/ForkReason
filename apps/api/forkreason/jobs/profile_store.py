@@ -183,10 +183,14 @@ class ProfileStore:
             session.add(case)
             session.flush()
 
-        self._write_revision(session, case, number=1, outcome=outcome, result=result, submitter=None)
-        case.current_revision = max(case.current_revision, 1)
-        case.manifest_hash = result.manifest_hash
-        case.lifecycle = "resolved"
+        # Analysis is provisional until GenLayer accepts submit_case. Revision
+        # zero is an append-only projection of the analysis, not chain state.
+        if case.current_revision == 0:
+            self._write_revision(
+                session, case, number=0, outcome=outcome, result=result, submitter=None
+            )
+            case.manifest_hash = result.manifest_hash
+            case.lifecycle = "analysis_ready"
         session.flush()
         return case
 

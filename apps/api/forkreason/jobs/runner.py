@@ -8,16 +8,20 @@ pinned snapshots, so a restart loses nothing that was not already committed.
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import os
 import signal
 import threading
 import time
 
+from sqlalchemy import select
+
 from ..analysis.pipeline import PipelineConfig, run_pipeline
 from ..config import get_settings
 from ..db import session_scope
 from ..domain import AnalysisCancelledError, AnalysisError
+from ..models import ChainTransaction
 from . import queue as q
 from .profile_store import ProfileStore
 
@@ -45,6 +49,7 @@ class AnalysisWorker:
             upstream_candidate_limit=settings.upstream_candidate_limit,
         )
         self._threads: list[threading.Thread] = []
+        self._chain_thread: threading.Thread | None = None
 
     # --- lifecycle -------------------------------------------------------
 
@@ -64,6 +69,10 @@ class AnalysisWorker:
             )
             thread.start()
             self._threads.append(thread)
+        self._chain_thread = threading.Thread(
+            target=self._reconcile_loop, name=f"{WORKER_ID}-chain", daemon=True
+        )
+        self._chain_thread.start()
 
     def stop(self) -> None:
         _stop.set()
@@ -71,6 +80,34 @@ class AnalysisWorker:
     def join(self, timeout: float | None = None) -> None:
         for thread in self._threads:
             thread.join(timeout)
+        if self._chain_thread:
+            self._chain_thread.join(timeout)
+
+    def _reconcile_loop(self) -> None:
+        """Keep chain RPC latency out of the analysis job slots."""
+        while not _stop.is_set():
+            try:
+                with session_scope() as session:
+                    pending = session.scalar(
+                        select(ChainTransaction)
+                        .where(ChainTransaction.status.in_(("submitted", "consensus_pending")))
+                        .order_by(ChainTransaction.observed_at)
+                        .limit(1)
+                        .with_for_update(skip_locked=True)
+                    )
+                    if pending is not None:
+                        from ..chain_reconciliation import reconcile_transaction
+
+                        try:
+                            reconcile_transaction(session, pending)
+                        except Exception as exc:  # noqa: BLE001 - persisted id stays retryable
+                            log.warning("chain reconciliation will retry", extra={"error": str(exc)[:160]})
+                        finally:
+                            # ponytail: one poller; add a queue only if serial polling bottlenecks.
+                            pending.observed_at = dt.datetime.now(dt.timezone.utc)
+            except Exception as exc:  # noqa: BLE001 - the persisted id remains retryable
+                log.warning("chain reconciliation will retry", extra={"error": str(exc)[:160]})
+            _stop.wait(5.0)
 
     def _recover(self) -> int:
         """Return abandoned jobs to the queue before accepting new work."""

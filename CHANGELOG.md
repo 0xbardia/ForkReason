@@ -4,6 +4,36 @@ All notable changes to ForkReason are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Initial registration is a complete, tested path.** The case page requests
+  a typed six-string payload (`buildSubmitCaseArgs`, pinned against the shipping
+  `submit_case(origin_repo, origin_commit, target_repo, target_commit,
+  manifest_hash, evidence_digest)` ABI), checks wallet, account and network,
+  and has the visitor's browser wallet sign it. Analysis is stored as
+  provisional revision 0; the public Case becomes chain-backed only after
+  reconciliation.
+- **Chain reconciliation.** The API records the wallet's transaction id, and the
+  worker verifies network, contract, calldata, sender, execution result and
+  `LATEST_FINAL` contract state with the read-only GenLayer SDK before one
+  atomic database transaction appends revision N+1 and advances the Case
+  pointer. Prior revisions are never modified; duplicate, stale, wrong-case,
+  wrong-contract and wrong-network observations are rejected.
+- Unit, API-integration and real-browser (Playwright, decoding the signed
+  GenLayer calldata) tests for both lifecycles.
+
+### Fixed
+- **Werkzeug/Requests asymmetric false positive.** Werkzeug → Requests was
+  HEAVILY_DERIVED / HIGH while Requests → Werkzeug was INDEPENDENT. Divergence
+  is now scored only when a derivation is itself supported, and the evidence
+  layer no longer counts HTTP header names, MIME types, bare routes, character
+  alphabets, interpreter pseudo-names, example URLs, dotfiles or convention
+  module names as lineage. Both directions are INDEPENDENT; see
+  `test_requests_werkzeug_lineage_is_stable_in_both_directions`.
+- A transaction hash the RPC has not indexed yet is retried for 15 minutes
+  instead of being rejected, and unverified claims are bounded per case.
+
 ## [1.0.0] — 2026-10-04
 
 First public release. ForkReason reconstructs software lineage from two public
