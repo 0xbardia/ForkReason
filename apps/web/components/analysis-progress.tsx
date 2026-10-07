@@ -106,7 +106,9 @@ export function AnalysisProgress({ jobId }: { jobId: string }) {
       : job.status === "cancelled"
         ? "Analysis cancelled"
         : "Analysis failed"
-    : "Analysis in progress";
+    : error
+      ? "Analysis unavailable"
+      : "Analysis in progress";
 
   return (
     <div className="layout analysis-page">
@@ -156,7 +158,7 @@ export function AnalysisProgress({ jobId }: { jobId: string }) {
             ))}
           </ol>
 
-          {!job ? (
+          {!job && !error ? (
             <ul className="stage-list" aria-hidden="true">
               {Array.from({ length: 8 }).map((_, index) => (
                 <li key={index} className="stage-item" data-state="pending">

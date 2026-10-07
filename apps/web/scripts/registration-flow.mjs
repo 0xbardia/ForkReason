@@ -297,6 +297,22 @@ try {
     await scenarioContext.close();
     console.log(`PASS ${scenario}`);
   }
+
+  const missingContext = await browser.newContext();
+  const missingPage = await missingContext.newPage();
+  await missingContext.route(`${apiOrigin}/api/v1/analyses/missing-e2e`, (route) =>
+    route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ error: { code: "job_not_found", message: "That analysis does not exist." } }),
+    }),
+  );
+  await missingPage.goto(`${baseURL}/analysis/missing-e2e`, { waitUntil: "domcontentloaded" });
+  await missingPage.getByRole("status").filter({ hasText: "That analysis does not exist." }).waitFor();
+  assert.equal(await missingPage.locator(".skeleton-line").count(), 0);
+  await missingPage.getByText("Analysis unavailable", { exact: true }).waitFor();
+  await missingContext.close();
+  console.log("PASS missing analysis deep link exits loading state");
 } finally {
   await browser.close();
 }
