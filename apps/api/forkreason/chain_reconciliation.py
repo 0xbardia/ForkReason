@@ -326,6 +326,7 @@ def reconcile_observed_write(
             "challenge_evidence": challenge.evidence_refs,
             "evidence_digest": challenge.evidence_digest,
         })
+        _copy_analysis_evidence(session, case.id, challenge.base_revision, expected_revision)
         manifest = {
             "chain_case_id": chain_case_id,
             "challenge_id": f"{chain_case_id}#{expected_revision}",
@@ -387,31 +388,37 @@ def _chain_case_matches(chain_case: dict[str, Any], case: Case, revision: CaseRe
     )
 
 
-def _copy_analysis_evidence(session: Session, case_id: str) -> None:
+def _copy_analysis_evidence(session: Session, case_id: str, source: int = 0, target: int = 1) -> None:
+    """Carry a revision's evidence forward so the new current revision has its own rows.
+
+    Rows of `source` are never modified; the new rows are separate, content-addressed copies.
+    """
     rows = session.scalars(
-        select(EvidenceItem).where(EvidenceItem.case_id == case_id, EvidenceItem.revision_number == 0)
+        select(EvidenceItem).where(EvidenceItem.case_id == case_id, EvidenceItem.revision_number == source)
     ).all()
     ref_ids: dict[str, str] = {}
     for item in rows:
-        suffix = "-0-c" if item.id.endswith("-0-c") else "-0"
-        new_id = item.id[:-len(suffix)] + suffix.replace("-0", "-1")
+        conflicting = item.id.endswith(f"-{source}-c")
+        suffix = f"-{source}-c" if conflicting else f"-{source}"
+        new_id = item.id[: -len(suffix)] + (f"-{target}-c" if conflicting else f"-{target}")
         ref_ids[item.id] = new_id
-        if not item.evidence_type.startswith("conflicting:") and item.id.endswith("-0"):
-            ref_ids[item.id[:-2]] = new_id
+        if source == 0 and not conflicting:
+            # Analysis relations point at the unsuffixed evidence id.
+            ref_ids[item.id[: -len(suffix)]] = new_id
         session.add(EvidenceItem(
-            id=new_id, case_id=item.case_id, revision_number=1, dna_layer=item.dna_layer,
+            id=new_id, case_id=item.case_id, revision_number=target, dna_layer=item.dna_layer,
             evidence_type=item.evidence_type, strength=item.strength, score=item.score,
             rationale=item.rationale, origin_source=item.origin_source,
             target_source=item.target_source, excerpt=item.excerpt,
         ))
     for explanation in session.scalars(
         select(AlternativeExplanation).where(
-            AlternativeExplanation.case_id == case_id, AlternativeExplanation.revision_number == 0
+            AlternativeExplanation.case_id == case_id, AlternativeExplanation.revision_number == source
         )
     ).all():
-        new_id = explanation.id.replace("-0-", "-1-", 1)
+        new_id = explanation.id.replace(f"-{source}-", f"-{target}-", 1)
         session.add(AlternativeExplanation(
-            id=new_id, case_id=case_id, revision_number=1, kind=explanation.kind,
+            id=new_id, case_id=case_id, revision_number=target, kind=explanation.kind,
             support=explanation.support, score=explanation.score,
             rationale=explanation.rationale,
             evidence_refs=[ref_ids.get(ref, ref) for ref in explanation.evidence_refs],
@@ -420,10 +427,13 @@ def _copy_analysis_evidence(session: Session, case_id: str) -> None:
     for relation in session.scalars(
         select(EvidenceRelation).where(EvidenceRelation.case_id == case_id)
     ).all():
+        if source > 0 and not relation.id.endswith(f"-{source}"):
+            continue
         subject = ref_ids.get(relation.subject_ref)
         if subject:
+            base_id = relation.id[: -len(f"-{source}")] if source > 0 else relation.id
             session.add(EvidenceRelation(
-                id=f"{relation.id}-1", case_id=case_id, subject_kind=relation.subject_kind,
+                id=f"{base_id}-{target}", case_id=case_id, subject_kind=relation.subject_kind,
                 subject_ref=subject, relation=relation.relation,
                 object_kind=relation.object_kind, object_ref=relation.object_ref,
                 weight=relation.weight,

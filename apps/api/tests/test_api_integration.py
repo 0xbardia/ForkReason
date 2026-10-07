@@ -1084,7 +1084,25 @@ def _challenge_fixture(session):
         id=challenge.tx_hash, case_id=case.id, kind="challenge", network="studionet",
         status="submitted", payload_summary={"challenge_id": challenge.id},
     )
-    session.add_all((revision, challenge, tx))
+    from forkreason.models import AlternativeExplanation, EvidenceItem, EvidenceRelation
+
+    session.add_all((
+        revision, challenge, tx,
+        EvidenceItem(
+            id="ev-hash-1", case_id=case.id, revision_number=1, dna_layer="CODE",
+            evidence_type="shared_function", strength="MEDIUM", score=0.6, rationale="pinned",
+            origin_source={}, target_source={}, excerpt="x",
+        ),
+        AlternativeExplanation(
+            id=f"{case.id}-1-INDEPENDENT_SAME_SPEC", case_id=case.id, revision_number=1,
+            kind="INDEPENDENT_SAME_SPEC", support="HIGH", score=0.8, rationale="r",
+            evidence_refs=["ev-hash-1"], is_selected=True,
+        ),
+        EvidenceRelation(
+            id="ev-hash-origin-1", case_id=case.id, subject_kind="evidence", subject_ref="ev-hash-1",
+            relation="observed_in", object_kind="repository", object_ref=case.origin_full_name, weight=0.6,
+        ),
+    ))
     session.commit()
     return case, revision, challenge, tx
 
@@ -1148,6 +1166,15 @@ def test_accepted_challenge_appends_revision_and_updates_public_case(client, ses
     assert public_case["case"]["current_revision"] == 2
     assert public_case["verdict"]["verdict"] == "SHARED_UPSTREAM"
     assert [item["revision_number"] for item in public_case["revisions"]] == [1, 2]
+    # The new current revision carries the case's evidence forward; revision 1's rows are untouched.
+    from forkreason.models import AlternativeExplanation, EvidenceItem, EvidenceRelation
+
+    assert [e["id"] for e in public_case["evidence"]] == ["ev-hash-2"]
+    assert session.get(EvidenceItem, "ev-hash-1").revision_number == 1
+    assert session.get(AlternativeExplanation, f"{case.id}-2-INDEPENDENT_SAME_SPEC").evidence_refs == ["ev-hash-2"]
+    assert session.get(AlternativeExplanation, f"{case.id}-1-INDEPENDENT_SAME_SPEC").evidence_refs == ["ev-hash-1"]
+    assert session.get(EvidenceRelation, "ev-hash-origin-2").subject_ref == "ev-hash-2"
+    assert session.get(EvidenceRelation, "ev-hash-origin-1").subject_ref == "ev-hash-1"
 
 
 def test_pending_malformed_and_stale_chain_observations_fail_closed(client, session) -> None:
