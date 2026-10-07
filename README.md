@@ -237,7 +237,7 @@ git clone https://github.com/0xbardia/ForkReason.git
 cd ForkReason
 
 python3.12 -m venv .venv
-.venv/bin/pip install -e '.[dev]'
+.venv/bin/pip install -e '.[dev,contract]'
 cp .env.example .env      # then edit DATABASE_URL
 ```
 
