@@ -62,7 +62,7 @@ All notable changes to ForkReason are recorded here. The format follows
 
 | Gate | Result |
 |---|---|
-| Backend | 245 passed |
+| Backend | 246 passed |
 | Contract Direct Mode | 51 passed |
 | Contract Studio Mode | 8 passed, 5 validators, up to 3 rotations |
 | `genvm-lint` | 3 checks passed |
