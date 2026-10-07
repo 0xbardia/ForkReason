@@ -214,7 +214,7 @@ class ProfileStore:
             select(ChainTransaction.id).where(
                 ChainTransaction.case_id == case.id,
                 ChainTransaction.kind == "registration",
-                ChainTransaction.status.in_(("consensus_pending", "accepted")),
+                ChainTransaction.status.in_(("submitted", "consensus_pending", "accepted")),
             ).limit(1)
         )
         if in_flight:

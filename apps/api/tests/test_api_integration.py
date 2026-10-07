@@ -1480,3 +1480,30 @@ def test_rate_limited_chain_reads_back_off_instead_of_spending_the_rpc_budget(se
     horizon = dt.datetime.now(dt.timezone.utc) + recon.RATE_LIMIT_BACKOFF - 2 * recon.POLL_INTERVAL
     observed_at = row.observed_at if row.observed_at.tzinfo else row.observed_at.replace(tzinfo=dt.timezone.utc)
     assert observed_at > horizon
+
+
+def test_rate_limited_transaction_lookup_leaves_the_row_pending_and_backs_off(session, monkeypatch) -> None:
+    import datetime as dt
+    from types import SimpleNamespace
+
+    from forkreason import chain_reconciliation as recon
+    from forkreason.models import ChainTransaction
+
+    case, _ = _provisional_case(session)
+    row = ChainTransaction(
+        id="0x" + "b" * 64, case_id=case.id, kind="registration", network="studionet",
+        status="submitted", payload_summary={},
+    )
+    session.add(row)
+    session.commit()
+    monkeypatch.setattr(recon, "get_settings", lambda: SimpleNamespace(
+        genlayer_network="studionet", genlayer_contract_address="0x" + "a" * 40,
+        genlayer_rpc_url="https://studio.genlayer.com/api",
+    ))
+    monkeypatch.setattr(recon, "observe_chain_write", lambda *args: {
+        "error": {"message": "Rate limit exceeded: 500 requests per hour", "rate_limited": True},
+    })
+    assert recon.reconcile_transaction(session, row) == "submitted"
+    observed_at = row.observed_at if row.observed_at.tzinfo else row.observed_at.replace(tzinfo=dt.timezone.utc)
+    assert observed_at > dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=3)
+    assert case.current_revision == 0

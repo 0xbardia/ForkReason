@@ -46,7 +46,9 @@ def observe_chain_write(
         text=True, capture_output=True, timeout=35, cwd=root, check=False,
     )
     if result.returncode:
-        raise RuntimeError("GenLayer transaction observation failed")
+        raise RuntimeError(
+            "GenLayer transaction observation failed: " + (result.stderr or "").strip()[-160:]
+        )
     try:
         return json.loads(result.stdout)
     except json.JSONDecodeError as exc:
@@ -96,6 +98,13 @@ def reconcile_transaction(session: Session, row: ChainTransaction) -> str:
         row.id, row.network, settings.genlayer_rpc_url,
         settings.genlayer_contract_address or "", chain_case_id, expected_revision,
     )
+    failure = observation.get("error") if isinstance(observation, dict) else None
+    if isinstance(failure, dict):
+        # The RPC could not be asked. That says nothing about the transaction.
+        if failure.get("rate_limited"):
+            row.observed_at = dt.datetime.now(dt.timezone.utc) + RATE_LIMIT_BACKOFF - POLL_INTERVAL
+            return row.status
+        raise RuntimeError("GenLayer RPC error: " + str(failure.get("message", ""))[:160])
     status = reconcile_observed_write(
         session, row, observation,
         expected_network=settings.genlayer_network,

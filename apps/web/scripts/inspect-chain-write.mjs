@@ -21,7 +21,14 @@ if (!chain || !/^0x[0-9a-f]{64}$/i.test(input.tx_id) || !/^0x[0-9a-f]{40}$/i.tes
   throw new Error("invalid GenLayer inspection parameters");
 }
 const client = createClient({ chain, endpoint: input.rpc_url });
-const transaction = await client.getTransaction({ hash: input.tx_id });
+let transaction;
+try {
+  transaction = await client.getTransaction({ hash: input.tx_id });
+} catch (error) {
+  const message = String(error?.details ?? error?.message ?? error).slice(0, 200);
+  process.stdout.write(JSON.stringify({ error: { message, rate_limited: /rate limit/i.test(message) } }));
+  process.exit(0);
+}
 if (!transaction) {
   process.stdout.write(JSON.stringify({ transaction: { tx_id: input.tx_id, status: "NOT_FOUND" } }));
   process.exit(0);
