@@ -10,7 +10,7 @@ SDK and `docs.genlayer.com` disagree, this project follows the SDK.
 |---|---|---|
 | Python | 3.12.13 | Local runs, full test suite green |
 | PostgreSQL | 18 | Migrations applied, queue exercised |
-| Node.js | 22.23.3 (frontend), 20.20.2 (PM2) | Production build, `next start` |
+| Node.js | 22.23.3 (frontend), 20.20.2 (PM2) | Production build and PM2 serving the assembled standalone bundle |
 | nginx | system | TLS termination verified live |
 | PM2 | system (Node 20) | Three production processes supervised |
 
@@ -48,7 +48,7 @@ Resolved in the release venv:
 |---|---|---|
 | `genlayer-test` | 0.29.2 | Direct Mode and Studio Mode |
 | `genvm-linter` | 0.11.1-rc.2 | 3 checks |
-| `glsim` | from `genlayer-test[sim]` | GLSim simulator, no Docker |
+| `glsim` | 0.29.2 | Bundled with `genlayer-test[sim]`; 5 validators, up to 3 rotations |
 
 ```bash
 uv pip install --python .venv/bin/python 'genlayer-test[sim]'

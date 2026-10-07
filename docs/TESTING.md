@@ -8,7 +8,6 @@ bugs this project has had were found by executing something, not by reading it.
 | Suite | Command | Result |
 |---|---|---|
 | Backend | `PYTHONPATH=apps/api .venv/bin/python -m pytest apps/api/tests/ -q` | **246 passed** |
-| Backend lint | `.venv/bin/python -m pyflakes apps/api/forkreason/` | clean |
 | Contract, Direct Mode | `.venv/bin/gltest contracts/tests/ -m "not integration" -q` | **51 passed** |
 | Contract, Studio Mode | `./deploy/studio/run-studio.sh` | **8 passed** |
 | Contract lint | `.venv/bin/genvm-lint contracts/forkreason_registry.py` | 3 checks passed |
