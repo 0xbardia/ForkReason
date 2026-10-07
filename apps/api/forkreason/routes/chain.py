@@ -69,13 +69,13 @@ async def contract_info() -> dict:
         "release_deployment": {
             "network": "GenLayer Studio (studionet)",
             "file": "forkreason_registry_upload.py",
-            "address_display": "0xb3...d07b",
+            "address_display": "0xb3c179E52EC98c1114B55CFCB9b3EdFCc5D0d07b",
             "tx": (
                 "0x4c5c6d72bcae900d4b3a08dcb0131d292b9bf77d72d4a91375bac95381c6518b"
             ),
             "consensus": "Reached consensus",
             "state": "FINALIZED",
-            "verified_read": "get_case_count returned 0 (Accepted)",
+            "verified_read": "get_case_count returned 0 at deployment (Accepted)",
             "note": "Source hash and deployed address were verified against the release transaction.",
         },
     }

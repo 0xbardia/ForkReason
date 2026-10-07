@@ -534,6 +534,16 @@ def test_chain_contract_reports_honestly_when_unconfigured(client: TestClient) -
     assert "challenge_case" in body["write_methods"]
 
 
+def test_chain_contract_deployment_metadata_uses_full_address_and_timestamps_read(
+    client: TestClient,
+) -> None:
+    deployment = client.get("/api/v1/chain/contract").json()["release_deployment"]
+    assert deployment["address_display"] == (
+        "0xb3c179E52EC98c1114B55CFCB9b3EdFCc5D0d07b"
+    )
+    assert "at deployment" in deployment["verified_read"]
+
+
 def test_chain_status_does_not_require_wallet(client: TestClient) -> None:
     response = client.get("/api/v1/chain/status")
     assert response.status_code == 200
