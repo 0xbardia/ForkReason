@@ -28,7 +28,7 @@ from ..domain import (
 from ..ids import canonical_json, content_hash
 
 MANIFEST_SCHEMA_VERSION = "forkreason/evidence-manifest/v1"
-MANIFEST_CREATED_BY = "forkreason-pipeline/1.0.0"
+MANIFEST_CREATED_BY = "forkreason-pipeline/1.0.1"
 
 # Never put these in a manifest: they are unbounded and/or not evidence.
 MAX_MANIFEST_EVIDENCE = 120

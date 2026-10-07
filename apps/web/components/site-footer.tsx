@@ -48,7 +48,7 @@ export function SiteFooter() {
               GenLayer consensus. It reports relationship, not blame.
             </p>
             <p className="site-footer-version mono">
-              v1.0.0 · AGPL-3.0 · bydx.fun
+              v1.0.1 · AGPL-3.0 · bydx.fun
             </p>
           </div>
 

@@ -198,6 +198,7 @@ def test_scenario_a_is_reproducible() -> None:
     origin, target = derived_pair()
     first = run_pipeline(origin, target, PipelineConfig())
     second = run_pipeline(origin, target, PipelineConfig())
+    assert first.manifest["created_by"] == "forkreason-pipeline/1.0.1"
     assert first.manifest_hash == second.manifest_hash
     assert manifest_json(first.manifest) == manifest_json(second.manifest)
 
