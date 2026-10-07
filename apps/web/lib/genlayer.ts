@@ -277,24 +277,28 @@ export async function writeContract(
   }
 }
 
-function observedExecutionResult(receipt: unknown): string | null {
+/**
+ * Did the contract call succeed? Decided by the leader's execution and the
+ * consensus verdict; a validator cancelled after quorum reports `idle`/ERROR
+ * and says nothing about the call.
+ */
+export function observedExecutionResult(receipt: unknown): string | null {
   if (!receipt || typeof receipt !== "object") return null;
   const tx = receipt as {
     txExecutionResultName?: string;
-    consensus_data?: { validators?: Array<{ result?: string }> };
+    result_name?: string;
+    consensus_data?: { leader_receipt?: unknown };
   };
   if (tx.txExecutionResultName) return tx.txExecutionResultName;
-  const outcomes = tx.consensus_data?.validators?.map((validator) => {
-    if (!validator.result) return null;
-    try {
-      return atob(validator.result).charCodeAt(0) === 0;
-    } catch {
-      return false;
-    }
-  }) ?? [];
-  if (outcomes.length > 0 && outcomes.every(Boolean)) return ExecutionResult.FINISHED_WITH_RETURN;
-  if (outcomes.some((outcome) => outcome === false)) return ExecutionResult.FINISHED_WITH_ERROR;
-  return null;
+  const receipts = ([] as Array<{ mode?: string; execution_result?: string }>).concat(
+    (tx.consensus_data?.leader_receipt as never) ?? [],
+  );
+  const leader = receipts.find((entry) => entry?.mode === "leader");
+  if (!leader || !tx.result_name) return null;
+  const agreed = tx.result_name === "AGREE" || tx.result_name === "MAJORITY_AGREE";
+  return leader.execution_result === "SUCCESS" && agreed
+    ? ExecutionResult.FINISHED_WITH_RETURN
+    : ExecutionResult.FINISHED_WITH_ERROR;
 }
 
 export async function transactionStatus(

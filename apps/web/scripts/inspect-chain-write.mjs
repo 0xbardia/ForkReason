@@ -3,6 +3,7 @@ import { localnet, studionet, testnetAsimov, testnetBradbury } from "genlayer-js
 import { TransactionHashVariant } from "genlayer-js/types";
 
 import { decodeCall } from "./genlayer-calldata.mjs";
+import { executionSucceeded } from "./genlayer-outcome.mjs";
 
 const input = JSON.parse(await new Promise((resolve, reject) => {
   let data = "";
@@ -38,21 +39,11 @@ if (!transaction) {
 const call = typeof transaction.data?.calldata?.base64 === "string"
   ? decodeCall(transaction.data.calldata.base64)
   : null;
-const receipts = [
-  ...(transaction.consensus_data?.validators ?? []),
-  ...(Array.isArray(transaction.consensus_data?.leader_receipt)
-    ? transaction.consensus_data.leader_receipt
-    : transaction.consensus_data?.leader_receipt
-      ? [transaction.consensus_data.leader_receipt]
-      : []),
-];
-const results = receipts.map((receipt) => receipt.result).filter((value) => typeof value === "string");
+// Leader execution + consensus verdict; idle (cancelled) validators are ignored.
 const executionSuccess =
   typeof transaction.txExecutionResultName === "string"
     ? transaction.txExecutionResultName === "FINISHED_WITH_RETURN"
-    : results.length > 0 && results.every((value) => {
-        try { return atob(value).charCodeAt(0) === 0; } catch { return false; }
-      });
+    : executionSucceeded(transaction);
 const tx = {
   tx_id: transaction.tx_id ?? transaction.hash,
   status: transaction.statusName ?? transaction.status_name ?? "UNKNOWN",

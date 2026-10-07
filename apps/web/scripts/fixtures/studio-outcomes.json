@@ -1,0 +1,134 @@
+{
+  "provenance": "Consensus fields of real Studio transactions signed through the production ForkReason frontend on 2026-10-07 (genlayer-js getTransaction), reduced to the fields the outcome rule reads.",
+  "transactions": [
+    {
+      "tx_id": "0x106bd2619410dde93c97531f337eb7ad3c30f3a59d8a726aecaa0e175b33bb97",
+      "note": "submit_case accepted; one validator voted disagree",
+      "status": "FINALIZED",
+      "result_name": "MAJORITY_AGREE",
+      "leader_receipt": [
+        {
+          "mode": "leader",
+          "vote": null,
+          "execution_result": "SUCCESS",
+          "result_status": "return"
+        },
+        {
+          "mode": "validator",
+          "vote": "agree",
+          "execution_result": "SUCCESS",
+          "result_status": "return"
+        }
+      ],
+      "validators": [
+        {
+          "vote": "agree",
+          "execution_result": "SUCCESS",
+          "result": "AAA="
+        },
+        {
+          "vote": "agree",
+          "execution_result": "SUCCESS",
+          "result": "AAA="
+        },
+        {
+          "vote": "disagree",
+          "execution_result": "SUCCESS",
+          "result": "AAA="
+        },
+        {
+          "vote": "disagree",
+          "execution_result": "SUCCESS",
+          "result": "AAA="
+        }
+      ],
+      "expect_success": true
+    },
+    {
+      "tx_id": "0xa5ceffceae7055b2cab15439ed05520099568fbdb3ffed428e1e1612602e6ec4",
+      "note": "challenge_case rolled back by the contract guard (invented evidence class)",
+      "status": "FINALIZED",
+      "result_name": "MAJORITY_DISAGREE",
+      "leader_receipt": [
+        {
+          "mode": "leader",
+          "vote": null,
+          "execution_result": "ERROR",
+          "result_status": "rollback"
+        },
+        {
+          "mode": "validator",
+          "vote": "disagree",
+          "execution_result": "ERROR",
+          "result_status": "rollback"
+        }
+      ],
+      "validators": [
+        {
+          "vote": "disagree",
+          "execution_result": "ERROR",
+          "result": "AWV2aWRlbmNlX2NsYXNzIGlzIG5vdCBhIHBlcm1pdHRlZCB2YWx1ZQ=="
+        },
+        {
+          "vote": "idle",
+          "execution_result": "ERROR",
+          "result": "AmlkbGU="
+        },
+        {
+          "vote": "idle",
+          "execution_result": "ERROR",
+          "result": "AmlkbGU="
+        },
+        {
+          "vote": "disagree",
+          "execution_result": "ERROR",
+          "result": "AWV2aWRlbmNlX2NsYXNzIGlzIG5vdCBhIHBlcm1pdHRlZCB2YWx1ZQ=="
+        }
+      ],
+      "expect_success": false
+    },
+    {
+      "tx_id": "0xccd9f3a378ed50d2637758f33ac124875642fa788c6b80373f2e25d8c1ffa185",
+      "note": "challenge_case accepted; one validator idle (cancelled after quorum)",
+      "status": "FINALIZED",
+      "result_name": "MAJORITY_AGREE",
+      "leader_receipt": [
+        {
+          "mode": "leader",
+          "vote": null,
+          "execution_result": "SUCCESS",
+          "result_status": "return"
+        },
+        {
+          "mode": "validator",
+          "vote": "idle",
+          "execution_result": "ERROR",
+          "result_status": "contract_error"
+        }
+      ],
+      "validators": [
+        {
+          "vote": "agree",
+          "execution_result": "SUCCESS",
+          "result": "AAA="
+        },
+        {
+          "vote": "idle",
+          "execution_result": "ERROR",
+          "result": "AmlkbGU="
+        },
+        {
+          "vote": "agree",
+          "execution_result": "SUCCESS",
+          "result": "AAA="
+        },
+        {
+          "vote": "agree",
+          "execution_result": "SUCCESS",
+          "result": "AAA="
+        }
+      ],
+      "expect_success": true
+    }
+  ]
+}
