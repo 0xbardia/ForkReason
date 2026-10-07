@@ -129,13 +129,13 @@ challenge come from the chain.
 
 | Property | Behaviour |
 |---|---|
-| Verified per write | network, contract address, sender, method, the exact calldata arguments (decoded from the binary form), execution result, `LATEST_FINAL` `get_case` / `get_revision` / `get_challenge` |
+| Verified per write | network, contract address, sender, method, the exact calldata arguments (decoded from the binary form), execution result, `LATEST_FINAL` `get_revision` (and `get_challenge` for a challenge); `get_case` is cross-checked when the RPC allows it |
 | Pending | stays `consensus_pending`; the public Case does not change |
 | Atomicity | one transaction appends revision N+1 and moves `current_revision`; a rollback leaves the id `submitted` and the next poll retries |
 | Idempotency / races | the Case row is locked; a second transaction for an existing revision is rejected; a stale observation cannot move the pointer back |
 | Unseen hash | retried for 15 minutes (RPC lag), then `rejected` |
 | Flooding | at most 8 unverified ids per case |
-| RPC budget | contract reads happen only after a successful execution is accepted; rows are polled at most every 10 s; a rate limit backs a row off for 5 minutes (Studio allows 500 `gen_call` per hour) |
+| RPC budget | contract reads happen only after a successful execution is accepted, one at a time, stopping at the first rate limit; rows are polled at most every 10 s; a rate limit backs a row off for 5 minutes (Studio allows 500 `gen_call` per hour per IP, shared with every other app on the host: production should use a dedicated RPC endpoint) |
 
 GenLayer is authoritative for accepted verdicts and revision order. PostgreSQL
 is the application projection used for fast public Case reads; it cannot

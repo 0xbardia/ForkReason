@@ -1507,3 +1507,33 @@ def test_rate_limited_transaction_lookup_leaves_the_row_pending_and_backs_off(se
     observed_at = row.observed_at if row.observed_at.tzinfo else row.observed_at.replace(tzinfo=dt.timezone.utc)
     assert observed_at > dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=3)
     assert case.current_revision == 0
+
+
+def test_registration_reconciles_from_the_revision_alone_when_get_case_was_not_readable(client, session) -> None:
+    from forkreason.chain_reconciliation import reconcile_observed_write
+    from forkreason.models import ChainTransaction
+
+    case, provisional = _provisional_case(session)
+    contract, tx_id = "0x" + "a" * 40, "0x" + "c" * 64
+    row = ChainTransaction(
+        id=tx_id, case_id=case.id, kind="registration", network="studionet",
+        status="submitted", payload_summary={},
+    )
+    session.add(row)
+    session.commit()
+    observed = _registration_observation(case, provisional, tx_id, contract)
+    observed["case"] = None  # the metered get_case read was rate limited
+
+    # A revision for some other case is still refused.
+    foreign = {**observed, "revision": {**observed["revision"], "case_id": "f" * 64}}
+    assert reconcile_observed_write(
+        session, row, foreign, expected_network="studionet", expected_contract=contract,
+    ) == "rejected"
+    row.status = "submitted"
+    assert reconcile_observed_write(
+        session, row, observed, expected_network="studionet", expected_contract=contract,
+    ) == "accepted"
+    session.commit()
+    assert case.current_revision == 1
+    assert case.submitter == "0x" + "b" * 40
+    assert client.get(f"/api/v1/cases/{case.id}").json()["case"]["current_revision"] == 1

@@ -82,15 +82,19 @@ async function read(functionName, args = []) {
 // and there is nothing to verify until consensus has accepted a successful
 // execution, so earlier polls stay at the transaction lookup.
 const settled = (tx.status === "ACCEPTED" || tx.status === "FINALIZED") && tx.execution_success;
-const [chainCase, revision, challenge] = settled
-  ? await Promise.all([
-      read("get_case", [input.chain_case_id]),
-      read("get_revision", [input.chain_case_id, input.revision_number]),
-      input.revision_number > 1
-        ? read("get_challenge", [`${input.chain_case_id}#${input.revision_number}`])
-        : Promise.resolve(null),
-    ])
-  : [null, null, null];
+// Sequential and ordered by importance: the first read the verifier needs goes
+// first, and the first rate limit ends the attempt instead of spending the rest.
+const limited = () => readErrors.some((message) => /rate limit/i.test(message));
+let revision = null;
+let challenge = null;
+let chainCase = null;
+if (settled) {
+  revision = await read("get_revision", [input.chain_case_id, input.revision_number]);
+  if (revision && input.revision_number > 1 && !limited()) {
+    challenge = await read("get_challenge", [`${input.chain_case_id}#${input.revision_number}`]);
+  }
+  if (revision && !limited()) chainCase = await read("get_case", [input.chain_case_id]);
+}
 process.stdout.write(JSON.stringify({
   transaction: tx, case: chainCase, revision, challenge, read_errors: readErrors,
 }));

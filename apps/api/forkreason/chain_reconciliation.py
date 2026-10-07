@@ -220,33 +220,39 @@ def reconcile_observed_write(
         _set_challenge_status(session, row, "failed")
         return row.status
 
+    # `get_revision` already proves the case exists, is current and carries the
+    # manifest; `get_case` is metered separately by the RPC, so it is an extra
+    # check when it was readable, not a precondition.
     chain_case = observed.get("case") or {}
     chain_revision = observed.get("revision") or {}
-    if not isinstance(chain_case, dict) or not chain_case or not isinstance(chain_revision, dict) or not chain_revision:
+    if not isinstance(chain_case, dict) or not isinstance(chain_revision, dict) or not chain_revision:
         row.status = "consensus_pending"
         return row.status
+    chain_case_id = revisions.get(1).manifest_hash if revisions.get(1) else base.manifest_hash
     if (
-        chain_case.get("case_id") != (revisions.get(1).manifest_hash if revisions.get(1) else base.manifest_hash)
-        or _as_int(chain_case.get("current_revision")) != expected_revision
-        or chain_revision.get("case_id") != chain_case.get("case_id")
+        chain_revision.get("case_id") != chain_case_id
         or _as_int(chain_revision.get("revision_number")) != expected_revision
         or chain_revision.get("is_current") is not True
+        or (chain_case and (
+            chain_case.get("case_id") != chain_case_id
+            or _as_int(chain_case.get("current_revision")) != expected_revision
+        ))
     ):
         row.status = "rejected"
         return row.status
+    sender = str(tx.get("from") or "")
 
     if row.kind == "registration":
         if (
             case.current_revision != 0
-            or chain_case.get("lifecycle") != "RESOLVED"
-            or not _chain_case_matches(chain_case, case, base)
+            or not sender
+            or chain_revision.get("manifest_hash") != base.manifest_hash
+            or (chain_case and (
+                chain_case.get("lifecycle") != "RESOLVED"
+                or not _chain_case_matches(chain_case, case, base)
+                or str(chain_case.get("submitter", "")).lower() != sender.lower()
+            ))
         ):
-            row.status = "rejected"
-            return row.status
-        if not tx.get("from") or str(chain_case.get("submitter", "")).lower() != str(tx["from"]).lower():
-            row.status = "rejected"
-            return row.status
-        if chain_revision.get("manifest_hash") != base.manifest_hash:
             row.status = "rejected"
             return row.status
     else:
@@ -254,17 +260,19 @@ def reconcile_observed_write(
         initial = revisions.get(1)
         if (
             initial is None
-            or not _chain_case_matches(chain_case, case, initial)
-            or chain_case.get("lifecycle") != "CHALLENGED"
             or case.current_revision != challenge.base_revision
-            or chain_challenge.get("case_id") != chain_case.get("case_id")
+            or not sender
+            or chain_challenge.get("case_id") != chain_case_id
             or _as_int(chain_challenge.get("base_revision")) != challenge.base_revision
             or chain_challenge.get("rationale") != challenge.rationale
             or chain_challenge.get("status") != "RECORDED"
             or chain_challenge.get("manifest_hash") != chain_revision.get("manifest_hash")
             or chain_revision.get("manifest_hash") == base.manifest_hash
-            or not tx.get("from")
-            or str(chain_challenge.get("submitter", "")).lower() != str(tx["from"]).lower()
+            or str(chain_challenge.get("submitter", "")).lower() != sender.lower()
+            or (chain_case and (
+                chain_case.get("lifecycle") != "CHALLENGED"
+                or not _chain_case_matches(chain_case, case, initial)
+            ))
         ):
             row.status = "rejected"
             return row.status
@@ -319,8 +327,8 @@ def reconcile_observed_write(
             "evidence_digest": challenge.evidence_digest,
         })
         manifest = {
-            "chain_case_id": chain_case["case_id"],
-            "challenge_id": f"{chain_case['case_id']}#{expected_revision}",
+            "chain_case_id": chain_case_id,
+            "challenge_id": f"{chain_case_id}#{expected_revision}",
             "base_revision": challenge.base_revision,
         }
     revision = CaseRevision(
@@ -342,7 +350,7 @@ def reconcile_observed_write(
         challenge.submitter = str(chain_challenge["submitter"])
         challenge.status = "recorded"
     elif row.kind == "registration":
-        case.submitter = str(chain_case["submitter"])
+        case.submitter = sender
     session.flush()
     return row.status
 
