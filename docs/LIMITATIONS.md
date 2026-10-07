@@ -65,6 +65,11 @@ verdict in those cases would make the tool worse, not better.
 
 ## Operational limitations
 
+**Shared GenLayer Studio RPC quotas.** The production endpoint is shared by
+other applications on the host and can rate-limit reads. Reconciliation backs
+off and retries, but a provider quota can delay final database visibility. A
+direct QA read also reached the provider's `5000 requests per day` limit.
+
 **Rate limits on public reads.** `GET /api/v1/cases` and `/search` have no
 per-client rate limit. Bounded pagination limits response size; availability is
 the residual risk.
@@ -75,3 +80,10 @@ repeat analysis cheap, with per-snapshot size bounds but no pruning policy.
 **Consensus depends on the configured provider.** On a hosted deployment, model
 availability affects whether a case resolves. It fails closed: an unverifiable
 decision is never recorded.
+
+**Challenge output can fail closed on an off-enum evidence class.** A model may
+return a class outside the contract's allowed set; that challenge rolls back and
+does not change the current revision. Production tx
+[`0x0e663652421ead9305c41559a503a34f8ed16aceed38b24b1d804506a430dd55`](https://explorer-studio.genlayer.com/tx/0x0e663652421ead9305c41559a503a34f8ed16aceed38b24b1d804506a430dd55)
+shows this fail-closed result. A later accepted challenge created revision 2;
+the contract's current revision is 2 and revision 1 remains readable.

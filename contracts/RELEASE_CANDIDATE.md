@@ -134,8 +134,8 @@ rather than retyped text.
 |---|---|
 | Network | GenLayer Studio (studionet) |
 | Contract file | `forkreason_registry_upload.py` |
-| Deployed at | `0xb3...d07b` (Studio truncates the address in its UI) |
-| Deployment tx | `0x4c5c6d72bcae900d4b3a08dcb0131d292b9bf77d72d4a91375bac95381c6518b` |
+| Deployed at | [`0xb3c179E52EC98c1114B55CFCB9b3EdFCc5D0d07b`](https://explorer-studio.genlayer.com/address/0xb3c179E52EC98c1114B55CFCB9b3EdFCc5D0d07b) |
+| Deployment tx | [`0x4c5c6d72bcae900d4b3a08dcb0131d292b9bf77d72d4a91375bac95381c6518b`](https://explorer-studio.genlayer.com/tx/0x4c5c6d72bcae900d4b3a08dcb0131d292b9bf77d72d4a91375bac95381c6518b) |
 | Consensus | Reached consensus |
 | Transaction state | FINALIZED |
 | Source SHA-256 | `867474f56b0fc169d9a254da4ac96435fa154156e09c85db08d1cbc3a0f92a0a` |
@@ -167,16 +167,36 @@ get_challenge_count  get_dna_layers  get_latest_revision  get_revision
 get_revision_count  get_valid_confidences  get_valid_verdicts  submit_case
 ```
 
-`get_case_count` was called against the deployed contract and returned
-**`0`** (Response: Accepted), which is the correct value for a registry with
-no cases yet. That is a real on-chain read of the deployed bytecode.
+At deployment time, `get_case_count` returned **`0`** (Response: Accepted),
+which was the correct value for the empty registry. This is a historical
+deployment-time read; production now contains chain-backed cases.
 
 Every method's parameters were confirmed against Studio's generated call form:
 `get_cases_page` → `offset, limit`; `get_revision` → `case_id,
 revision_number`; `challenge_case` → `case_id, base_revision,
 challenge_rationale, evidence_digest`; `submit_case` → six arguments.
 
-The parameter-taking reads were **not** individually invoked, because Studio
-keeps every expanded method's response in one shared panel and the harness
-cannot reliably attribute a response to the method that produced it. Rather
-than report unverified results, that limitation is recorded here.
+The parameter-taking reads were **not** individually invoked in the original
+Studio deployment session, because Studio keeps expanded method responses in
+one shared panel. Contract behavior is covered by Direct and multi-validator
+Studio tests. Production registration and challenge transactions are separately
+verified from their finalized explorer records and the public Case history.
+
+## Production registration and challenge
+
+The public Case `78f1569af860a9dc6aff172fdbba8d11` is chain-backed at revision 2.
+Its finalized registration transaction is
+[`0x106bd2619410dde93c97531f337eb7ad3c30f3a59d8a726aecaa0e175b33bb97`](https://explorer-studio.genlayer.com/tx/0x106bd2619410dde93c97531f337eb7ad3c30f3a59d8a726aecaa0e175b33bb97)
+and its finalized accepted challenge is
+[`0xccd9f3a378ed50d2637758f33ac124875642fa788c6b80373f2e25d8c1ffa185`](https://explorer-studio.genlayer.com/tx/0xccd9f3a378ed50d2637758f33ac124875642fa788c6b80373f2e25d8c1ffa185).
+The production API retains revisions 1 and 2, with revision 2 current. The
+registration transaction decodes to the six-argument `submit_case` ABI in
+contract order. The commit-specific QA report is attached to the latest GitHub
+release.
+
+The contract case key is the manifest hash
+`ab2a0d07100949c53c94ec3808b3873d60a92282dc48130281bff1a001c74ab6`; the
+database's public Case id is `78f1569af860a9dc6aff172fdbba8d11`. Explorer
+contract reads returned `get_case_count = 1`, `get_case.current_revision = 2`,
+`get_revision_count = 2`, revision 1 `is_current = false`, and revision 2
+`is_current = true`.

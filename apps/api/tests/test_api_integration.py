@@ -522,9 +522,14 @@ def test_challenge_payload_requires_signing(client: TestClient, monkeypatch) -> 
 
 
 def test_chain_contract_reports_honestly_when_unconfigured(client: TestClient) -> None:
+    import hashlib
+    from pathlib import Path
+
     body = client.get("/api/v1/chain/contract").json()
     assert body["name"] == "ForkReasonRegistry"
     assert "deployed" in body
+    source = Path(__file__).resolve().parents[3] / "contracts" / "forkreason_registry.py"
+    assert body["source_sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
     assert "get_case" in body["read_methods"]
     assert "challenge_case" in body["write_methods"]
 

@@ -187,6 +187,17 @@ def _decide(evidence_digest: str) -> str:
 
 Storage is written **only** after consensus returns, in deterministic execution.
 
+### Production deployment
+
+| Field | Value |
+|---|---|
+| Network | GenLayer Studio (studionet) |
+| Contract | [`0xb3c179E52EC98c1114B55CFCB9b3EdFCc5D0d07b`](https://explorer-studio.genlayer.com/address/0xb3c179E52EC98c1114B55CFCB9b3EdFCc5D0d07b) |
+| Deployment transaction | [`0x4c5c6d72bcae900d4b3a08dcb0131d292b9bf77d72d4a91375bac95381c6518b`](https://explorer-studio.genlayer.com/tx/0x4c5c6d72bcae900d4b3a08dcb0131d292b9bf77d72d4a91375bac95381c6518b) |
+| Contract source SHA-256 | `867474f56b0fc169d9a254da4ac96435fa154156e09c85db08d1cbc3a0f92a0a` |
+
+The source hash matches [`contracts/forkreason_registry.py`](contracts/forkreason_registry.py).
+
 ## Wallet transactions
 
 Reads need no wallet. Every user state-changing GenLayer action is signed by the
@@ -278,12 +289,19 @@ PYTHONPATH=apps/api .venv/bin/python -m pytest apps/api/tests/ -q
 
 # Contract, Studio Mode — 8 tests, real multi-validator consensus
 ./deploy/studio/run-studio.sh
+
+# Frontend — unit tests, typecheck, lint, production build
+cd apps/web && npm run test:unit && npm run typecheck && npm run lint && npm run build
 ```
 
 Studio Mode runs a real 5-validator GLSim network with leader rotation. It
 never uses `--leader-only`, which would bypass the committee entirely. See
 [`contracts/RELEASE_CANDIDATE.md`](contracts/RELEASE_CANDIDATE.md) for the
 frozen source hash and full results.
+
+The production build has **11 source routes**. The current frontend suite has
+30 unit tests; release browser QA covers Chromium, Firefox, WebKit and mobile.
+The commit-specific QA report is attached to the [latest GitHub release](https://github.com/0xbardia/ForkReason/releases/latest).
 
 ## Deployment
 

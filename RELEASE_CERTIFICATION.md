@@ -1,4 +1,8 @@
-# ForkReason V1 — release certification
+# Historical v1.0.0 release certification — superseded
+
+This records the earlier v1.0.0 candidate and its test counts. It is not the
+current V1 certification. The final commit, production and new patch release
+verification is attached to the [latest GitHub release](https://github.com/0xbardia/ForkReason/releases/latest).
 
 ## Release certification — d5f4627
 

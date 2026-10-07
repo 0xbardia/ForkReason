@@ -66,9 +66,10 @@ Key decisions:
   carry a stale nonce and break hydration.
 - **`/_next/static/` is immutable for a year.** Those filenames are content
   hashes.
-- **`proxy_read_timeout` is 30 s.** Analysis is queued, never inline, so no
-  legitimate request takes minutes. A longer timeout would only mask a stuck
-  worker.
+- **`proxy_read_timeout` is 180 s for analysis submission and 30 s otherwise.**
+  Analysis is queued, but intake can take longer than the standard API window.
+  A longer analysis timeout keeps nginx from killing a valid bounded request;
+  worker execution remains asynchronous.
 - **`client_max_body_size 1m`.** A submission carries a bounded evidence digest,
   not a repository.
 
@@ -82,6 +83,9 @@ Key decisions:
 | `APP_URL` | `https://forkreason.bydx.fun` |
 | `CORS_ORIGINS` | `https://forkreason.bydx.fun` |
 | `NEXT_PUBLIC_API_URL` | *(empty — same-origin through nginx)* |
+| `GENLAYER_NETWORK` | `studionet` |
+| `GENLAYER_CONTRACT_ADDRESS` | `0xb3c179E52EC98c1114B55CFCB9b3EdFCc5D0d07b` |
+| `NEXT_PUBLIC_GENLAYER_CONTRACT_ADDRESS` | `0xb3c179E52EC98c1114B55CFCB9b3EdFCc5D0d07b` |
 
 `NEXT_PUBLIC_*` values are inlined into the client bundle **at build time**.
 Rebuild the frontend after changing them:

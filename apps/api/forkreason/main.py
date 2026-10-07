@@ -44,7 +44,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="ForkReason API",
-        version="1.0.0",
+        version="1.0.1",
         description="Software lineage and provenance, verified by GenLayer consensus.",
         docs_url="/api/docs" if not settings.is_production else None,
         redoc_url=None,

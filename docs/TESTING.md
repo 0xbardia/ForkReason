@@ -14,9 +14,9 @@ bugs this project has had were found by executing something, not by reading it.
 | Contract lint | `.venv/bin/genvm-lint contracts/forkreason_registry.py` | 3 checks passed |
 | Frontend typecheck | `cd apps/web && npm run typecheck` | clean |
 | Frontend lint | `cd apps/web && npm run lint` | clean |
-| Frontend unit tests | `cd apps/web && npm run test:unit` | **17 passed** |
-| Frontend build | `cd apps/web && npm run build` | 11 routes, standalone bundle verified |
-| Visual QA | `cd apps/web && node scripts/capture.mjs <baseUrl> <outDir> <caseId>` | 40 captures, 0 problems |
+| Frontend unit tests | `cd apps/web && npm run test:unit` | **30 passed** |
+| Frontend build | `cd apps/web && npm run build` | 11 source routes, standalone assets verified |
+| Browser release QA | Chromium, Firefox, WebKit, mobile | See the QA report attached to the latest GitHub release |
 
 ## Direct Mode
 
@@ -85,17 +85,15 @@ job is to refuse bad decisions, and that is what these tests verify.
 | F — declared legitimate fork | `DECLARED_FORK` | contract enum coverage |
 | G — conflicting evidence changes the verdict | Revision preserved, new verdict | Studio Mode challenge test |
 
-## Visual QA
+## Browser release QA
 
-`scripts/capture.mjs` captures every required surface at 1440, 1280, 390 and
-360 px and fails loudly on console errors, horizontal overflow and 5xx. It also
-captures the case report, evidence explorer and challenge against a **real**
-case, because the signature screen should never be reviewed against an empty
-state.
-
-```
-40 captures across 10 surfaces x 4 viewports, 0 problems
-```
+The release gate opens the 11 authoritative source routes and checks the
+production JS/CSS assets, console, page errors, deep links and mobile overflow.
+The registration-flow browser scenario covers disconnected and wrong-network
+wallets, rejected signatures, failed and pending transactions, six-argument
+`submit_case` calldata, accepted challenge writes and immutable revisions. Its
+wallet and API responses are mocked; actual production transaction evidence is
+recorded separately in `FINAL_V1_QA_REPORT.md`.
 
 ## Bugs that only executing found
 

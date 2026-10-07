@@ -3,13 +3,15 @@
 Every finding, its status, and the evidence for that status. Nothing is hidden
 and nothing is downgraded to make a release gate pass.
 
-**Release condition: 0 open Critical, 0 open High.**
+**Release condition: 0 open Critical, 0 open High.** Verified 2026-10-07:
+`npm audit` reports 0 Critical, 0 High and 22 Moderate. The High advisory in
+`sharp@0.35.4` was resolved by pinning `sharp@0.35.5`.
 
 | Severity | Count | Open |
 |---|---|---|
 | Critical | 0 | 0 |
 | High | 0 | 0 |
-| Medium | 3 | 0 |
+| Medium | 4 | 0 |
 | Low | 4 | 0 |
 
 ---
@@ -147,9 +149,9 @@ absent and uses it only for the GLSim process via `REQUESTS_CA_BUNDLE`.
 machine-global and would break other services on the host that legitimately call
 OpenAI. The proxy is process-scoped for exactly this reason.
 
-### Historical: a test TLS private key was committed and pushed
+### Historical: a synthetic test TLS key remains in public Git history
 
-**Status: open, low severity, tracked as Accepted-Medium with a required fix.**
+**Component** Studio Mode harness · **Severity** Medium · **Status** Accepted.
 
 Found during final V1 certification by scanning full git history rather than
 only the working tree. Commit `1149af9` ("contract: freeze V1 release
@@ -173,11 +175,10 @@ The certificate is `CN=api.openai.com`, self-signed, RSA-2048, generated
 * It confers no OpenAI access. It is a TLS server key for a hostname, not a
   credential of any service; it cannot authenticate to `api.openai.com`.
 
-**Required remediation.** The key must be purged from published history, not
-merely deleted going forward. `deploy/studio/certs/` is already in
-`.gitignore`, so the fix is a history rewrite plus a force-push of the affected
-refs. That is an irreversible operation on externally visible refs, so it is
-recorded here and scheduled rather than performed without explicit authorisation.
+The certificate and key remain retrievable from Git history. They are synthetic
+test material, not production credentials, and do not grant access to OpenAI or
+any other service. The working tree and current release archive contain no such
+key. No history rewrite is part of this patch release.
 
 **Interim compensating control.** The harness now **regenerates the certificate
 on every run** with a one-day validity, instead of reusing the first one it

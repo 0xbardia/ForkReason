@@ -1,6 +1,6 @@
 [project]
 name = "forkreason"
-version = "1.0.0"
+version = "1.0.1"
 description = "ForkReason — software lineage and provenance, verified by GenLayer consensus"
 requires-python = ">=3.12"
 dependencies = [

@@ -3,7 +3,7 @@
 Everything below is **post-V1**. Nothing here is required for V1, and nothing
 here is in progress unless marked so.
 
-## SHIPPED — V1.0.0
+## SHIPPED — V1.0.1
 
 - Forensic pipeline across six Repo DNA layers
 - Canonical, reproducible evidence manifest
@@ -15,6 +15,9 @@ here is in progress unless marked so.
 - Independent-validator consensus with fail-closed parsing
 - Prompt-injection release gate with adversarial fixtures
 - Public dApp, Explore, case sharing, twenty documentation pages
+- Browser-wallet registration, finalized chain reconciliation, and immutable
+  challenge revision history
+- Werkzeug/Requests bidirectional false-positive regression fix
 
 ## NEXT — V1.1
 

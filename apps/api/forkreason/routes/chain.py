@@ -249,7 +249,7 @@ def _contract_source_sha256() -> str | None:
     import hashlib
     from pathlib import Path
 
-    path = Path(__file__).resolve().parents[3] / "contracts" / "forkreason_registry.py"
+    path = Path(__file__).resolve().parents[4] / "contracts" / "forkreason_registry.py"
     try:
         return hashlib.sha256(path.read_bytes()).hexdigest()
     except OSError:

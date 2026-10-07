@@ -4,7 +4,7 @@ All notable changes to ForkReason are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.1] — 2026-10-07
 
 ### Added
 - **Initial registration is a complete, tested path.** The case page requests
@@ -22,6 +22,9 @@ All notable changes to ForkReason are recorded here. The format follows
   wrong-contract and wrong-network observations are rejected.
 - Unit, API-integration and real-browser (Playwright, decoding the signed
   GenLayer calldata) tests for both lifecycles.
+- The production build loads only `NEXT_PUBLIC_*` values from the repository
+  `.env`, so fresh-clone builds include the same chain configuration as the
+  deployed frontend.
 
 ### Fixed
 - **Werkzeug/Requests asymmetric false positive.** Werkzeug → Requests was
@@ -50,6 +53,33 @@ All notable changes to ForkReason are recorded here. The format follows
   classes, as the registration digest always did.
 - A transaction hash the RPC has not indexed yet is retried for 15 minutes
   instead of being rejected, and unverified claims are bounded per case.
+- The contract-source hash endpoint now resolves the repository contract from
+  the monorepo root and returns the deployed source hash.
+- Updated the `sharp` override from `0.35.4` to `0.35.5` to clear the High npm
+  advisory. `npm audit` reports 0 Critical, 0 High and 22 Moderate findings.
+
+### Verification
+
+| Gate | Result |
+|---|---|
+| Backend | 245 passed |
+| Contract Direct Mode | 51 passed |
+| Contract Studio Mode | 8 passed, 5 validators, up to 3 rotations |
+| `genvm-lint` | 3 checks passed |
+| Frontend unit tests | 30 passed |
+| Frontend typecheck / lint / build | pass; 11 source routes |
+| Browser release QA | Chromium, Firefox, WebKit and mobile; see release report |
+
+| Deployment | Value |
+|---|---|
+| Production | [forkreason.bydx.fun](https://forkreason.bydx.fun) |
+| Contract | [`0xb3c179E52EC98c1114B55CFCB9b3EdFCc5D0d07b`](https://explorer-studio.genlayer.com/address/0xb3c179E52EC98c1114B55CFCB9b3EdFCc5D0d07b) |
+| Deployment transaction | [`0x4c5c6d72bcae900d4b3a08dcb0131d292b9bf77d72d4a91375bac95381c6518b`](https://explorer-studio.genlayer.com/tx/0x4c5c6d72bcae900d4b3a08dcb0131d292b9bf77d72d4a91375bac95381c6518b) |
+
+Known operational limits: shared Studio RPC quotas can delay reads, and an
+off-enum challenge evidence class correctly fails closed without changing the
+current revision. The remaining 22 Moderate dependency findings are in the
+wallet connector chain; see `docs/SECURITY-FINDINGS.md`.
 
 ## [1.0.0] — 2026-10-04
 

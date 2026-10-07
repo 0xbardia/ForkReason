@@ -131,4 +131,6 @@ avoid the wallet bundle where practical.
 
 ## Security posture
 
-`npm audit`: 0 critical, 0 high at release.
+`npm audit`: 0 critical, 0 high, 22 moderate. `sharp` is pinned to `0.35.5` to
+resolve the release-blocking high advisory; the remaining moderate findings are
+the wallet connector chain documented in `docs/SECURITY-FINDINGS.md`.

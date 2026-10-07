@@ -24,7 +24,7 @@ router = APIRouter(tags=["health"])
 @router.get("/health")
 async def health() -> dict:
     """Liveness. No dependency checks, so it cannot fail spuriously."""
-    return {"status": "ok", "service": "forkreason-api", "version": "1.0.0"}
+    return {"status": "ok", "service": "forkreason-api", "version": "1.0.1"}
 
 
 @router.get("/ready")

@@ -1,4 +1,8 @@
-# ForkReason V1 — independent verification (PARTIAL)
+# Historical partial verification — superseded
+
+This is an archival record of the 2026-10-04 run. Its open items were resolved
+or reverified later. The current commit, production, and release evidence is in
+[`FINAL_V1_QA_REPORT.md`](FINAL_V1_QA_REPORT.md).
 
 Verification run: 2026-10-04. Executed, not asserted.
 
@@ -35,9 +39,9 @@ and one known defect class is documented below as open.
 | Forensic scenarios A–E | correct |
 | Argument-order symmetry | chronology correct both directions |
 
-## OPEN — blocks certification
+## Issues recorded at that time
 
-### 1. Asymmetric verdict on the canonical sanity pair (HIGH) — RESOLVED
+### 1. Asymmetric verdict on the canonical sanity pair — RESOLVED
 
 Resolved after this run: both directions are now `INDEPENDENT` (HIGH and
 MEDIUM). The verdict stage no longer scores divergence without a supported
@@ -71,13 +75,13 @@ OpenAI access. Hardened by rotating per run with 1-day validity. The blob is
 still retrievable from history; purging it requires a force-push to an external
 ref and explicit authorisation.
 
-## NOT VERIFIED in this run
+## Not verified in that historical run
 
 Phases 11 through 16 and 22 were not executed. Specifically, no evidence was
 gathered in this run for:
 
-- deployed contract full address (the API still reports `deployed: false`
-  because the truncated Studio address is not wired in)
+- deployed contract full address (later verified as
+  `0xb3c179E52EC98c1114B55CFCB9b3EdFCc5D0d07b`)
 - deployed read-method invocation table
 - deployed write lifecycle
 - wallet security matrix
@@ -85,7 +89,7 @@ gathered in this run for:
 - honest visual scoring
 - final regression matrix against one commit
 
-Earlier sessions recorded Studio deployment tx
+The Studio deployment tx is
 `0x4c5c6d72bcae900d4b3a08dcb0131d292b9bf77d72d4a91375bac95381c6518b` with one
-verified read (`get_case_count` -> 0). That is prior evidence, not evidence
-from this run, and is not sufficient for certification.
+verified deployment-time read (`get_case_count` -> 0). Later transaction and
+runtime evidence is recorded in the final QA report.
