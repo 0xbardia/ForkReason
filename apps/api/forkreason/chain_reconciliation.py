@@ -357,7 +357,7 @@ def reconcile_observed_write(
 
 NOT_FOUND_GRACE = dt.timedelta(minutes=15)
 POLL_INTERVAL = dt.timedelta(seconds=10)
-RATE_LIMIT_BACKOFF = dt.timedelta(minutes=5)
+RATE_LIMIT_BACKOFF = dt.timedelta(minutes=2)
 
 
 def _within_grace(row: ChainTransaction) -> bool:

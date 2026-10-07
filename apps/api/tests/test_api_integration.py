@@ -1505,7 +1505,7 @@ def test_rate_limited_transaction_lookup_leaves_the_row_pending_and_backs_off(se
     })
     assert recon.reconcile_transaction(session, row) == "submitted"
     observed_at = row.observed_at if row.observed_at.tzinfo else row.observed_at.replace(tzinfo=dt.timezone.utc)
-    assert observed_at > dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=3)
+    assert observed_at > dt.datetime.now(dt.timezone.utc) + recon.RATE_LIMIT_BACKOFF - 2 * recon.POLL_INTERVAL
     assert case.current_revision == 0
 
 
