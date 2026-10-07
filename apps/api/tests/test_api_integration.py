@@ -1537,3 +1537,19 @@ def test_registration_reconciles_from_the_revision_alone_when_get_case_was_not_r
     assert case.current_revision == 1
     assert case.submitter == "0x" + "b" * 40
     assert client.get(f"/api/v1/cases/{case.id}").json()["case"]["current_revision"] == 1
+
+
+def test_challenge_digest_names_the_permitted_evidence_classes(session) -> None:
+    """On Studio the model invented classes (`RFC_STANDARD_LITERALS`, `DNA_LAYER`) when the
+    digest named none, and the contract's guard correctly rolled both challenges back."""
+    from forkreason.domain import DNA_LAYERS
+    from forkreason.routes.cases import ChallengePrepareRequest, _challenge_digest
+
+    case, revision = _provisional_case(session)
+    request = ChallengePrepareRequest(
+        submitter="0x" + "9" * 40, rationale="independent implementations of one specification",
+        evidence_summary="the overlap is limited to specification-defined names",
+    )
+    digest = _challenge_digest(case, revision, request)
+    line = next(item for item in digest.splitlines() if item.startswith("evidence classes: "))
+    assert set(line.removeprefix("evidence classes: ").split(", ")) == set(DNA_LAYERS)

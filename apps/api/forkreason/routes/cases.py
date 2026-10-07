@@ -464,6 +464,9 @@ def _challenge_digest(case: Case, revision: CaseRevision, payload: ChallengePrep
         f"CHALLENGE against case {case.id} revision {case.current_revision}\n"
         f"claim: {bounded_excerpt(payload.rationale, 400)}\n"
         f"prior verdict: {revision.verdict} / {revision.confidence}\n"
+        # The contract rejects any class outside this set. A digest that does not
+        # name them leaves the model to invent one (it did, twice, on Studio).
+        f"evidence classes: {', '.join(sorted(DNA_LAYERS))}\n"
         f"new evidence: {bounded_excerpt(payload.evidence_summary, 1200)}\n"
         "<forkreason_evidence>\n"
         f"{bounded_excerpt(payload.evidence_summary, 1200)}\n"

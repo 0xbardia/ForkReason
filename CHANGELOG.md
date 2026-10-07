@@ -43,6 +43,11 @@ All notable changes to ForkReason are recorded here. The format follows
   transaction). Contract reads are metered by the RPC (500 `gen_call`/hour on
   Studio): they now happen only after acceptance, rows are polled at a bounded
   cadence, and a rate limit backs the poller off.
+- **Challenges were rolled back by the contract.** The challenge digest named no
+  evidence classes, so on Studio the model invented `RFC_STANDARD_LITERALS` and
+  then `DNA_LAYER`, and the contract's guard rejected both (nothing was recorded,
+  and the reconciler marked them `failed`). The digest now lists the permitted
+  classes, as the registration digest always did.
 - A transaction hash the RPC has not indexed yet is retried for 15 minutes
   instead of being rejected, and unverified claims are bounded per case.
 
